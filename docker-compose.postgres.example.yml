@@ -1,0 +1,59 @@
+# Warren Pro with an external Postgres instead of the embedded database. Use this when you run
+# several Warren instances behind a load balancer or want the data in a database you already
+# back up. Requires a Pro licence (WARREN_LICENSE_KEY below); the Community edition runs on the
+# embedded database, see docker-compose.example.yml.
+#
+# For several clusters, several users or SSO, mount a YAML file to /app/config/application.yml
+# (see README, "Several clusters, several users") instead of the WARREN_RABBIT_* / WARREN_ADMIN_* variables.
+services:
+  warren:
+    image: ghcr.io/viba88/warren:latest
+    ports:
+      - "8080:8080"
+    environment:
+      WARREN_RABBIT_ID: prod
+      WARREN_RABBIT_NAME: Production
+      WARREN_RABBIT_MANAGEMENT_URL: http://rabbitmq.example.internal:15672
+      WARREN_RABBIT_HOST: rabbitmq.example.internal
+      WARREN_RABBIT_PORT: "5672"
+      WARREN_RABBIT_USERNAME: warren
+      WARREN_RABBIT_PASSWORD: change-me
+      WARREN_RABBIT_VHOST: /
+      WARREN_DB_URL: jdbc:postgresql://postgres:5432/warren
+      WARREN_DB_USERNAME: warren
+      WARREN_DB_PASSWORD: change-me-too
+      WARREN_ADMIN_USERNAME: admin
+      WARREN_ADMIN_PASSWORD: change-me-as-well
+      WARREN_PUBLIC_URL: https://warren.example.internal
+      WARREN_METRICS_SAMPLE_INTERVAL: 30s
+      WARREN_METRICS_RETENTION: 14d
+      # Pro licence: paste the key, or mount a file and set WARREN_LICENSE_FILE=/app/config/license.key.
+      # Without a key Warren runs the Community edition; a key can also be installed later in the UI.
+      WARREN_LICENSE_KEY: WARREN-...   # required with an external database
+      # WARREN_OIDC_ENABLED: "true"
+      # WARREN_OIDC_ISSUER_URI: https://login.example.com/realms/platform
+      # WARREN_OIDC_CLIENT_ID: warren
+      # WARREN_OIDC_CLIENT_SECRET: ...
+      # WARREN_OIDC_ROLES_CLAIM: realm_access.roles
+    # volumes:
+    #   - ./warren.yml:/app/config/application.yml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: warren
+      POSTGRES_USER: warren
+      POSTGRES_PASSWORD: change-me-too
+    volumes:
+      - warren-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warren"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  warren-pgdata:

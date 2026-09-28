@@ -1,0 +1,103 @@
+# Try Warren in a minute: a RabbitMQ, Warren next to it, and dead letters to look at.
+#
+#   docker compose -f docker-compose.try.yml up -d      →  http://localhost:8080, sign in as admin / admin
+#   docker compose -f docker-compose.try.yml down -v    →  everything gone again
+#
+# The seed step fills a few queues the way real consumers would: orders rejected by the consumer,
+# invoices that expired while nobody listened, shipping labels a Spring consumer republished with its
+# exception. Open orders.dlq, look at why they died, select a few and replay them. Nothing here
+# touches a broker of your own; the RabbitMQ management UI is on http://localhost:15672 (warren / warren).
+# Ports taken? TRY_WARREN_PORT=8081 TRY_RABBIT_UI_PORT=15680 docker compose -f docker-compose.try.yml up -d
+name: warren-try
+
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      # guest may only sign in from localhost; Warren and the seed step come from their own containers
+      RABBITMQ_DEFAULT_USER: warren
+      RABBITMQ_DEFAULT_PASS: warren
+    ports:
+      - "${TRY_RABBIT_UI_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      retries: 30
+
+  # Declares the demo topology and dead-letters messages through the management API, then exits.
+  # Runs once: when orders.dlq already holds messages it leaves them alone.
+  seed:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        api() { curl -sf -u warren:warren -H 'content-type: application/json' -X "$$1" "http://rabbitmq:15672/api$$2" $${3:+-d "$$3"} > /dev/null; }
+        if curl -sf -u warren:warren http://rabbitmq:15672/api/queues/%2F/orders.dlq | grep -q '"messages":[1-9]'; then echo "already seeded"; exit 0; fi
+
+        # orders: the consumer rejects, the broker dead-letters to orders.dlq
+        api PUT /exchanges/%2F/orders '{"type":"topic","durable":true}'
+        api PUT /exchanges/%2F/orders.dlx '{"type":"fanout","durable":true}'
+        api PUT /queues/%2F/orders.dlq '{"durable":true}'
+        api PUT /queues/%2F/orders.process '{"durable":true,"arguments":{"x-dead-letter-exchange":"orders.dlx"}}'
+        api POST /bindings/%2F/e/orders.dlx/q/orders.dlq '{"routing_key":""}'
+        api POST /bindings/%2F/e/orders/q/orders.process '{"routing_key":"order.*"}'
+        # billing: invoices with a TTL, nobody consumes, they expire into billing.invoice.dead
+        api PUT /exchanges/%2F/billing '{"type":"direct","durable":true}'
+        api PUT /exchanges/%2F/billing.dlx '{"type":"fanout","durable":true}'
+        api PUT /queues/%2F/billing.invoice.dead '{"durable":true}'
+        api PUT /queues/%2F/billing.invoice '{"durable":true,"arguments":{"x-message-ttl":2000,"x-dead-letter-exchange":"billing.dlx"}}'
+        api POST /bindings/%2F/e/billing.dlx/q/billing.invoice.dead '{"routing_key":""}'
+        api POST /bindings/%2F/e/billing/q/billing.invoice '{"routing_key":"invoice"}'
+        # shipping: a Spring consumer gave up and republished to the DLQ itself (RepublishMessageRecoverer)
+        api PUT /exchanges/%2F/shipping '{"type":"direct","durable":true}'
+        api PUT /queues/%2F/shipping.label '{"durable":true}'
+        api PUT /queues/%2F/shipping.label.dlq '{"durable":true}'
+        api POST /bindings/%2F/e/shipping/q/shipping.label '{"routing_key":"label"}'
+
+        customers="ACME Northwind Contoso Initech Globex"
+        i=0
+        for c in $$customers $$customers $$customers $$customers; do
+          i=$$((i + 1)); id=$$((4700 + i))
+          if [ $$((i % 4)) -eq 0 ]; then err='Customer '$$c' is locked'; type=com.acme.orders.CustomerLockedException
+          else err='Timeout calling inventory after 5000 ms'; type=java.net.SocketTimeoutException; fi
+          api POST /exchanges/%2F/orders/publish "{\"routing_key\":\"order.created\",\"payload_encoding\":\"string\",\"payload\":\"{\\\"orderId\\\":$$id,\\\"customer\\\":\\\"$$c\\\",\\\"total\\\":$$((i * 37)).50}\",\"properties\":{\"message_id\":\"order-$$id\",\"content_type\":\"application/json\",\"headers\":{\"x-exception-type\":\"$$type\",\"x-exception-message\":\"$$err\"}}}"
+        done
+        api POST /queues/%2F/orders.process/get '{"count":20,"ackmode":"reject_requeue_false","encoding":"auto"}'
+        # three orders still on their way, so orders.process is not empty
+        for id in 4801 4802 4803; do
+          api POST /exchanges/%2F/orders/publish "{\"routing_key\":\"order.updated\",\"payload_encoding\":\"string\",\"payload\":\"{\\\"orderId\\\":$$id}\",\"properties\":{\"message_id\":\"order-$$id\",\"content_type\":\"application/json\"}}"
+        done
+
+        for n in 1 2 3 4 5 6; do
+          api POST /exchanges/%2F/billing/publish "{\"routing_key\":\"invoice\",\"payload_encoding\":\"string\",\"payload\":\"{\\\"invoiceNo\\\":\\\"2026-10$$n\\\",\\\"amount\\\":$$((n * 120))}\",\"properties\":{\"message_id\":\"inv-2026-10$$n\",\"content_type\":\"application/json\"}}"
+        done
+
+        for n in 1 2 3 4; do
+          api POST /exchanges/%2F/amq.default/publish "{\"routing_key\":\"shipping.label.dlq\",\"payload_encoding\":\"string\",\"payload\":\"{\\\"shipmentId\\\":\\\"SH-90$$n\\\",\\\"carrier\\\":\\\"DHL\\\"}\",\"properties\":{\"message_id\":\"label-90$$n\",\"content_type\":\"application/json\",\"headers\":{\"x-original-exchange\":\"shipping\",\"x-original-routing-key\":\"label\",\"x-exception-message\":\"Carrier API answered 503 Service Unavailable\",\"x-retry-count\":3}}}"
+        done
+        echo "seeded: 20 in orders.dlq, 6 expiring into billing.invoice.dead, 4 in shipping.label.dlq"
+
+  warren:
+    image: ghcr.io/viba88/warren:0.4
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    ports:
+      - "${TRY_WARREN_PORT:-8080}:8080"
+    environment:
+      WARREN_RABBIT_ID: try
+      WARREN_RABBIT_NAME: Try-out broker
+      WARREN_RABBIT_MANAGEMENT_URL: http://rabbitmq:15672
+      WARREN_RABBIT_HOST: rabbitmq
+      WARREN_RABBIT_USERNAME: warren
+      WARREN_RABBIT_PASSWORD: warren
+      WARREN_ADMIN_USERNAME: admin
+      WARREN_ADMIN_PASSWORD: admin
+    volumes:
+      - warren-data:/app/data
+
+volumes:
+  warren-data:

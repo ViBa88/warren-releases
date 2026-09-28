@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or idea
+    url: https://github.com/ViBa88/warren-releases/discussions
+    about: Ask in Discussions if it is not a bug or a concrete feature request.
+  - name: Licensing and contact
+    url: https://warrenops.io
+    about: Team and Pro licences, and how to reach the vendor.

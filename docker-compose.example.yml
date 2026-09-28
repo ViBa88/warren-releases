@@ -1,0 +1,34 @@
+# Warren with its embedded database: one container, one volume. This is the recommended setup
+# for a single Warren instance. For an external Postgres see docker-compose.postgres.example.yml.
+#
+#   docker compose up -d      →  http://localhost:8080, sign in with the admin credentials below
+#
+# The `warren-data` volume holds everything Warren remembers (replay audit, users, alert rules,
+# metrics, licence). Keep it; back it up by copying the volume.
+services:
+  warren:
+    image: ghcr.io/viba88/warren:latest
+    ports:
+      - "8080:8080"
+    environment:
+      WARREN_RABBIT_ID: prod
+      WARREN_RABBIT_NAME: Production
+      WARREN_RABBIT_MANAGEMENT_URL: http://rabbitmq.example.internal:15672
+      WARREN_RABBIT_HOST: rabbitmq.example.internal
+      WARREN_RABBIT_PORT: "5672"
+      WARREN_RABBIT_USERNAME: warren
+      WARREN_RABBIT_PASSWORD: change-me
+      WARREN_RABBIT_VHOST: /
+      WARREN_ADMIN_USERNAME: admin
+      WARREN_ADMIN_PASSWORD: change-me-as-well
+      WARREN_PUBLIC_URL: https://warren.example.internal
+      # Pro licence: paste the key, or mount a file and set WARREN_LICENSE_FILE=/app/config/license.key.
+      # WARREN_LICENSE_KEY: WARREN-...
+    volumes:
+      - warren-data:/app/data
+      # several clusters, users or SSO: mount a YAML (see README "Several clusters, several users")
+      # - ./warren.yml:/app/config/application.yml:ro
+    restart: unless-stopped
+
+volumes:
+  warren-data:
