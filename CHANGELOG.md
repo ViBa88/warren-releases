@@ -3,6 +3,11 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.6.0 (2026-09-30)
+
+- Overview page, now the start page: every cluster on one screen with its dead letters, dead-letter queues and queues without consumers, unreachable clusters marked, the firing alerts, the queues that gained most messages in the last hour, six or 24 hours, and everything Warren did in the last 24 hours. Cards and rows open the cluster, the queue or the audit entry; `g o` gets back to it; `GET /api/overview`. Growth and alerts need Team or Pro, the rest works in Community.
+- Alert condition `INFLOW_RATE`: messages arrive faster than a threshold per minute, sustained for a time. On a dead-letter queue that is the dead-letter rate, so it sees a mass failure even while a replay rule keeps draining the queue. Needs the broker's rate statistics (`rates_mode`).
+
 ## 0.5.0 (2026-09-30)
 
 - Replay, discard or export everything that matches: a death reason and/or a text, judged per message across the whole queue (up to 10,000 scanned), not only the messages on screen. The replay and discard dialogs offer it as soon as the queue view has a group or a search active; the API takes `selection.type: MATCHING`.

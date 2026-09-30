@@ -19,6 +19,9 @@ requests and questions are welcome here. Landing page: https://warrenops.io
 
 ## What it does
 
+- **Overview for whoever is on call**: every cluster on one page with its dead letters, unreachable
+  clusters marked, the firing alerts, the queues that gained most messages in the last hour, six or
+  24 hours, and everything Warren did in the last 24 hours. It is the start page; `g o` gets back to it.
 - **Multiple clusters and vhosts.** Configure any number of clusters; the same broker with
   several vhosts counts as several clusters. Switch between them in the top bar.
 - **Queue overview** with dead-letter queues detected automatically (by bindings to a
@@ -61,7 +64,7 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   properties, headers, death history and the first 16 KiB of its body (for an edited message
   also what was published instead). Configure the kept head with `WARREN_AUDIT_PAYLOAD_BYTES`.
 - **Keyboard**: everything is reachable without a mouse. `?` lists the shortcuts of the page;
-  `/` searches it, `g q`/`g r`/`g a`/`g u` go to queues, replays, alerts and users, `c` switches
+  `/` searches it, `g o`/`g q`/`g r`/`g a`/`g u` go to the overview, queues, replays, alerts and users, `c` switches
   the cluster. In a search field ↓/↑ move through the hits and Enter opens the marked one. In
   tables `j`/`k` move, Enter opens or expands, `x` selects; on a queue `r`, `d`
   and `p` replay, discard and publish. Dialogs submit with ⌘/Ctrl+Enter and pick options with
@@ -70,7 +73,9 @@ requests and questions are welcome here. Landing page: https://warrenops.io
 - **Metrics history**: every queue is sampled periodically (default 30 s, 7 days retention).
   The queue page shows messages, ready, unacked and consumers over 15 minutes to 7 days.
 - **Alerting**: rules match queues by regex on one or all clusters. Conditions: messages
-  above a threshold, no consumers while messages wait, growth within a time window. Each can
+  above a threshold, no consumers while messages wait, growth within a time window, inflow
+  above a rate per minute (on a dead-letter queue: the dead-letter rate, which shows a mass
+  failure even while a replay rule keeps draining the queue). Each can
   require the condition to hold for a number of seconds. Notifications go to Slack, Microsoft
   Teams or any JSON webhook; firing alerts are re-notified after a configurable interval and
   a resolved notification follows when the queue recovers.
@@ -277,6 +282,7 @@ OIDC login. Roles as in the table above.
 
 ```
 GET  /api/auth/providers                                   which login methods exist
+GET  /api/overview?growth=1h                               all clusters, firing alerts, growing queues, last 24 h of actions
 GET  /api/clusters                                         configured clusters with reachability
 GET  /api/clusters/{c}/queues                              queues with dead-letter classification
 GET  /api/clusters/{c}/queues/{q}/messages?limit=          peek at messages (max 200)
