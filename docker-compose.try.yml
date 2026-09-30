@@ -82,7 +82,7 @@ services:
         echo "seeded: 20 in orders.dlq, 6 expiring into billing.invoice.dead, 4 in shipping.label.dlq"
 
   warren:
-    image: ghcr.io/viba88/warren:0.4
+    image: ghcr.io/viba88/warren:0.5
     depends_on:
       rabbitmq: { condition: service_healthy }
     ports:

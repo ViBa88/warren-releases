@@ -116,6 +116,19 @@ choice for several Warren instances behind a load balancer or when you already b
 database server. Migrations run automatically on both. Without a licence Warren refuses to start
 against an external database and says so in the log.
 
+Several instances on one database coordinate through it: sampling and alerting, replay rules and
+the hourly housekeeping each run on one instance at a time, which takes a short lease in the
+`job_lock` table at every tick and renews it. An instance that stops renewing, because it died or
+was scaled down, is replaced within a few intervals; a clean shutdown hands over at once. Every
+instance serves the UI and runs manual replays. The log says which instance runs which job.
+
+The metrics history is what makes the database grow: one row per queue per sample, so at the
+default 30 s interval about 20,000 rows per queue and week. A broker with 100 queues stays well
+under a gigabyte; with a thousand queues plan for a few gigabytes and use Postgres, or lengthen
+`WARREN_METRICS_SAMPLE_INTERVAL`. The audit log is kept forever unless `WARREN_AUDIT_RETENTION`
+is set (for example `90d`); then finished actions with their per-message records and resolved
+alert events older than that are deleted once an hour. Firing alerts and running replays stay.
+
 ### One cluster, environment variables
 
 | Variable | Default | Purpose |
@@ -131,6 +144,8 @@ against an external database and says so in the log.
 | `WARREN_PORT` | `8080` | HTTP port |
 | `WARREN_PUBLIC_URL` | – | Base URL used for links in notifications |
 | `WARREN_METRICS_SAMPLE_INTERVAL` / `WARREN_METRICS_RETENTION` | `30s` / `7d` | Sampling and history retention |
+| `WARREN_AUDIT_RETENTION` | `0` (forever) | Age after which finished actions and resolved alert events are deleted, e.g. `90d` |
+| `WARREN_PEEK_CACHE_MAX_BYTES` | 256 MiB | Memory for peeked message bodies kept for the payload view; oldest go first |
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
 | `WARREN_DLQ_NAME_PATTERN` | see `application.yml` | Regex for name-based DLQ detection |
 
@@ -231,14 +246,17 @@ Warren back to Community with a warning in the UI.
 2. It fetches messages with `basic.get` **without acknowledging**. Unacked messages stay
    outstanding on the channel, so each fetch returns the next message.
 3. Selected messages are published to the target with `mandatory=true`. Only after the broker
-   confirms is the source message acknowledged. Unroutable publishes are detected via
+   confirms is the source message acknowledged. At full speed Warren publishes up to 100
+   messages and then waits for their confirms together, tracking each by its sequence number;
+   a throttled replay settles every message on its own. Unroutable publishes are detected via
    `basic.return` and reported as failed.
 4. Everything not selected is released with `nack + requeue`. Closing the channel releases
    whatever is left, even if Warren crashes mid-way.
 
 **Guarantee:** no message is ever lost. **Trade-off:** at-least-once. If Warren dies between
-the broker's confirm and its own ack, that one message is duplicated. Your consumers should
-be idempotent anyway; this is the same promise RabbitMQ itself makes.
+the broker's confirm and its own ack, the messages of that window (one when throttled) are
+duplicated. Your consumers should be idempotent anyway; this is the same promise RabbitMQ
+itself makes.
 
 **Throttling:** with `ratePerSecond` the publishes are spaced evenly and the replay runs in the
 background: the request returns the `RUNNING` action right away, and `GET /api/replays/{id}`
@@ -288,8 +306,12 @@ Replay body:
 }
 ```
 
-`selection.type` is `COUNT` (with `count`) or `FINGERPRINTS` (with fingerprints from the
-messages endpoint). `target.type` is `ORIGINAL`, `QUEUE` (with `queue`) or `EXCHANGE` (with
+`selection.type` is `COUNT` (with `count`), `FINGERPRINTS` (with fingerprints from the
+messages endpoint) or `MATCHING` (with `match`: `reasons` such as `rejected` or `republished`
+and/or `text` found in the payload or a header value; every match of the scan is taken, or at
+most `count` of them). A `MATCHING` selection applies the queue view's filter to the whole
+queue, not only to the messages it has loaded; it scans up to `warren.inspection.max-scan`
+messages. `target.type` is `ORIGINAL`, `QUEUE` (with `queue`) or `EXCHANGE` (with
 `exchange` and `routingKey`). `edits` is optional and only allowed with `FINGERPRINTS`; each
 of `payload`, `contentType` and `headers` is optional, `headers` replaces the application
 headers completely (death bookkeeping is stripped either way). `ratePerSecond` (1 to 1000) is
@@ -298,7 +320,7 @@ optional; with it the replay is throttled and runs in the background (see above)
 ## Roadmap
 
 Four-eyes approval for replays, message editing for several messages at once, e-mail as a
-notification channel, per-cluster permissions, retention and export of the audit log.
+notification channel, per-cluster permissions, export of the audit log.
 
 ## License
 

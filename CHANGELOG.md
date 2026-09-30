@@ -3,6 +3,18 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.5.0 (2026-09-30)
+
+- Replay, discard or export everything that matches: a death reason and/or a text, judged per message across the whole queue (up to 10,000 scanned), not only the messages on screen. The replay and discard dialogs offer it as soon as the queue view has a group or a search active; the API takes `selection.type: MATCHING`.
+- The message search also finds text in header values, where consumers leave their exception messages; "Why they died" groups show their oldest and newest death.
+- Several Warren instances on one PostgreSQL share the work: sampling and alerting, replay rules and the hourly housekeeping run on one instance at a time and move over when it stops (Pro).
+- `WARREN_AUDIT_RETENTION` deletes finished actions with their message records and resolved alert events beyond an age; the default keeps them forever.
+- Much less broker load with many queues: the management API is asked only for the columns Warren reads, the flow graph fetches each list once, clusters are sampled in parallel.
+- Faster database writes: samples, audit messages and sightings go in as batches; expired samples are deleted in chunks; indexes for the alert list.
+- A full-speed replay confirms a hundred publishes at a time, each tracked by its sequence number, so large replays no longer pay one round trip per message. Every message still gets its own verdict.
+- `WARREN_PEEK_CACHE_MAX_BYTES` bounds the memory peeked message bodies may take (default 256 MiB).
+- A throttled replay is sized by what the queue holds, so "first 10,000" or "everything matching" on a small queue is no longer refused; a cleared peek field falls back to 50.
+
 ## 0.4.0 (2026-09-25)
 
 - Stop a running throttled replay: what went stays replayed, the rest stays in the queue (status `STOPPED`).
