@@ -8,6 +8,8 @@ The RabbitMQ management UI tells you *that* a queue has 300 messages. Warren tel
 *what* they are, *why* they died, how the number developed, and moves them back with one
 click, logged, without a hand-written script at 3 a.m.
 
+![Warren: from 200 dead letters to a throttled replay, keyboard only](docs/demo-main.gif)
+
 ## About this repository
 
 This is Warren's public home: the README, the compose files, the [changelog](CHANGELOG.md),
