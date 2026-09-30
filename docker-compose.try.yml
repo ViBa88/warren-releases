@@ -6,8 +6,9 @@
 # The seed step fills a few queues the way real consumers would: orders rejected by the consumer,
 # invoices that expired while nobody listened, shipping labels a Spring consumer republished with its
 # exception. Open orders.dlq, look at why they died, select a few and replay them. Nothing here
-# touches a broker of your own; the RabbitMQ management UI is on http://localhost:15672 (warren / warren).
-# Ports taken? TRY_WARREN_PORT=8081 TRY_RABBIT_UI_PORT=15680 docker compose -f docker-compose.try.yml up -d
+# touches a broker of your own; the RabbitMQ management UI is on http://localhost:15680 (warren / warren), off the
+# default port so it never collides with a RabbitMQ you already run.
+# Ports taken? TRY_WARREN_PORT=8081 TRY_RABBIT_UI_PORT=15690 docker compose -f docker-compose.try.yml up -d
 name: warren-try
 
 services:
@@ -18,7 +19,7 @@ services:
       RABBITMQ_DEFAULT_USER: warren
       RABBITMQ_DEFAULT_PASS: warren
     ports:
-      - "${TRY_RABBIT_UI_PORT:-15672}:15672"
+      - "${TRY_RABBIT_UI_PORT:-15680}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 5s

@@ -97,7 +97,8 @@ docker compose -f docker-compose.try.yml up -d
 
 Open http://localhost:8080 and sign in as `admin` / `admin`. Open `orders.dlq`, look at why the
 messages died, select a few and replay them. `docker compose -f docker-compose.try.yml down -v`
-removes everything again. Ports taken? `TRY_WARREN_PORT=8081 TRY_RABBIT_UI_PORT=15680` in front.
+removes everything again. The demo broker's management UI is on port 15680, off the default so it
+never collides with a RabbitMQ you already run. Ports taken? `TRY_WARREN_PORT=8081 TRY_RABBIT_UI_PORT=15690` in front.
 
 To run Warren next to your own broker, see [Running against your own RabbitMQ](#running-against-your-own-rabbitmq).
 
