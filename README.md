@@ -10,6 +10,8 @@ click, logged, without a hand-written script at 3 a.m.
 
 ![Warren: from 200 dead letters to a throttled replay, keyboard only](docs/demo-main.gif)
 
+Watch it with controls on YouTube: [Replay RabbitMQ dead letters without a script](https://youtu.be/0ojsYE-jMFA) (31 s).
+
 ## About this repository
 
 This is Warren's public home: the README, the compose files, the [changelog](CHANGELOG.md),
