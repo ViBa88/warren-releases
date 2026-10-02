@@ -28,7 +28,9 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   several vhosts counts as several clusters. Switch between them in the top bar.
 - **Queue overview** with dead-letter queues detected automatically (by bindings to a
   dead-letter exchange, or by name pattern) and sorted to the top, plus a bell on queues
-  with a firing alert.
+  with a firing alert. Empty retry wait queues stay out of the way until you ask for them or
+  search by name. Parking queues are tagged `PARKED`, quorum queues whose peeks count as
+  deliveries `LIMIT`.
 - **Message browser**: peek at messages without consuming them, see payload (pretty JSON),
   headers, and the complete `x-death` history: which queue rejected it, how often, when. A message a
   consumer republished itself carries no death time; "dead since" then shows how long Warren has seen
@@ -61,12 +63,20 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   option asks for a reason. Unlike a discard it works on
   queues of any size; the audit log records who, why and how many, not the messages themselves.
   Streams cannot be purged.
-- **Audit log** of every replay, discard, purge and publish: who, when, from which cluster and queue to where,
-  per-message outcome. Each message can be opened as it sat in the queue: why it died,
+- **Park** poison messages (operators only): the selected messages, the first N or every match of
+  the filter move to `<queue>.parking`, out of the way of replays and rules but not lost. Unlike a
+  replay they keep every header, `x-death` included, so a later replay from the parking queue goes
+  to the original route. Each carries `x-warren-parked-from`, `-parked-at`, `-parked-by` and an
+  optional note as `x-warren-park-reason`. Warren creates the parking queue as a plain durable
+  queue if it does not exist (this needs configure permission; otherwise create it once yourself)
+  and uses an existing one as it is.
+- **Audit log** of every replay, park, discard, purge, export and publish: who, when, from which cluster
+  and queue to where, per-message outcome. Filter it by action, queue, user or rule and time range;
+  the filters stay in the URL, so a filtered view can be shared. Each message can be opened as it sat in the queue: why it died,
   properties, headers, death history and the first 16 KiB of its body (for an edited message
   also what was published instead). Configure the kept head with `WARREN_AUDIT_PAYLOAD_BYTES`.
 - **Keyboard**: everything is reachable without a mouse. `?` lists the shortcuts of the page;
-  `/` searches it, `g o`/`g q`/`g r`/`g a`/`g u` go to the overview, queues, replays, alerts and users, `c` switches
+  `/` searches it, `g o`/`g q`/`g r`/`g a`/`g u` go to the overview, queues, audit log, alerts and users, `c` switches
   the cluster. In a search field ↓/↑ move through the hits and Enter opens the marked one. In
   tables `j`/`k` move, Enter opens or expands, `x` selects; on a queue `r`, `d`
   and `p` replay, discard and publish. Dialogs submit with ⌘/Ctrl+Enter and pick options with
@@ -219,7 +229,7 @@ a valid key switches it to **Team** or **Pro** at runtime, no restart.
 
 | | Community | Team | Pro |
 |---|---|---|---|
-| Browse, search, replay, discard, purge, publish, audit log, local users, keyboard | yes | yes | yes |
+| Browse, search, replay, park, discard, purge, publish, audit log, local users, keyboard | yes | yes | yes |
 | Clusters and vhosts | the first configured one | up to 3 | unlimited, one flat price per installation |
 | Roles viewer / operator / admin | every local user is admin | yes | yes |
 | Metrics history and alerting | off (endpoints answer 402) | yes | yes |
@@ -278,6 +288,13 @@ current message, is recorded as `PARTIAL`, and everything not yet replayed stays
 Peeking through the management API marks messages as `redelivered`. That is a property of
 RabbitMQ, not something Warren can avoid.
 
+**Quorum queues with a delivery limit:** on RabbitMQ 3.13 every peek, and every message a
+replay, discard or export reads and puts back, counts as a delivery. A message that reaches the
+limit (`x-delivery-limit` or the policy's `delivery-limit`) is dropped or dead-lettered. On such
+queues Warren reads nothing until the user confirms: the API answers `409` with
+`code: DELIVERY_COUNTED` until the request carries `acknowledgeDeliveryCount`, and replay rules
+skip them. RabbitMQ 4 counts only abnormal returns, so peeks are safe there.
+
 ## API
 
 All endpoints need a session (`POST /api/auth/login` with `{"username","password"}`) or an
@@ -291,7 +308,8 @@ GET  /api/clusters/{c}/queues                              queues with dead-lett
 GET  /api/clusters/{c}/queues/{q}/messages?limit=          peek at messages (max 200)
 GET  /api/clusters/{c}/queues/{q}/history?range=1h         sampled metrics, range 15m…30d
 POST /api/clusters/{c}/queues/{q}/replay                   run a replay (OPERATOR)
-GET  /api/replays?clusterId=                               recent replays
+POST /api/clusters/{c}/queues/{q}/park                     move messages to {q}.parking (OPERATOR)
+GET  /api/replays?clusterId=&kind=&queue=&requestedBy=&since=&before=   audit log, newest first
 GET  /api/replays/{id}                                     one replay with per-message outcomes
 GET  /api/replays/{id}/messages/{messageId}                one message as it sat in the queue
 GET  /api/alerts/events?firing=true                        alert events

@@ -3,6 +3,17 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.7.0 (2026-10-02)
+
+- **Park**: move poison messages to `<queue>.parking` in one step, next to replay and discard. They keep their death history, so a replay from the parking queue later goes to the original route; an optional note goes into the audit log and onto each message. Warren creates the parking queue if it is missing. `POST /api/clusters/{c}/queues/{q}/park`, key `m`.
+- **Quorum queues with a delivery limit** are safe to open on RabbitMQ 3.13, where every peek counts as a delivery: Warren marks them `LIMIT` in the queue list and reads, replays, discards or exports nothing until you confirm. Replay rules skip them. RabbitMQ 4 is not affected.
+- **Audit log** (formerly "Replays") filters by action, queue, user or rule and time range, keeps the filters in the URL and loads older entries page by page; `GET /api/replays` takes `kind`, `queue`, `requestedBy`, `since` and `before`.
+- Queue page: the messages come first; flow and history open on demand. Replay is the main action, Park and Discard sit together, Automate, Publish and Export moved into a "More" menu. All shortcuts stay.
+- Queue list: starts in triage order, dead-letter queues with messages on top; empty retry wait queues are hidden until asked for or searched.
+- Alert rules start from templates (dead letters piling up, growing dead-letter queue, consumers gone, mass failure), with the queue pattern read off the cluster's naming.
+- Messages published without any properties can be peeked again.
+- Smaller: the sidebar shows the full cluster name with vhost and version below, the account actions sit in a labelled menu, the fingerprint moved to the end of a message's properties.
+
 ## 0.6.0 (2026-09-30)
 
 - Overview page, now the start page: every cluster on one screen with its dead letters, dead-letter queues and queues without consumers, unreachable clusters marked, the firing alerts, the queues that gained most messages in the last hour, six or 24 hours, and everything Warren did in the last 24 hours. Cards and rows open the cluster, the queue or the audit entry; `g o` gets back to it; `GET /api/overview`. Growth and alerts need Team or Pro, the rest works in Community.
