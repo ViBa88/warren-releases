@@ -75,6 +75,26 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   the filters stay in the URL, so a filtered view can be shared. Each message can be opened as it sat in the queue: why it died,
   properties, headers, death history and the first 16 KiB of its body (for an edited message
   also what was published instead). Configure the kept head with `WARREN_AUDIT_PAYLOAD_BYTES`.
+- **Payloads you can read**: JSON as a tree that folds (large payloads open on two levels), as a
+  table of field paths, or raw. Files sent as base64 are recognised by their content and shown as
+  files: PDF and images open in a tab or preview inline, CSV previews as a table, JSON formatted,
+  with a warning when it does not parse; everything downloads under the name from a field such as
+  `fileName`. Java class names show their short name, dates how long ago, epoch fields a date. Each
+  value can be copied, its path too, or become the search ("show the messages with this value").
+- **Compare messages**: select two or more, and Warren lists only the payload fields that differ,
+  each value with how many messages carry it; fields unique per message (ids) in one line.
+- **Sensitive values hidden** in the message view: JSON fields and headers whose name contains
+  `password`, `token`, `apikey`, `iban`, `email` and the like, plus anything that looks like an e-mail
+  address, an IBAN or a card number (Luhn-checked) inside payloads, headers and exception texts.
+  Operators and admins can show one message's values; viewers cannot. Display only: copies,
+  downloads, exports, edits and replays keep the real values, and the API returns them to anyone
+  with access. `WARREN_MASKING_ENABLED`, `WARREN_MASKING_FIELDS`, `WARREN_MASKING_VALUES`,
+  `WARREN_MASKING_ALLOW_REVEAL`.
+- **Notes on a group of dead letters** (operators write, everyone reads): "known bug in the invoice
+  consumer, fix in 4.2, do not replay". A note belongs to one bar of "why they died" in one queue,
+  for example the exception `OrderNotFoundException` or the reason `expired`. It shows under that
+  bar, in each message of the group, and at the top of the replay dialog when the replay would take
+  such messages.
 - **Keyboard**: everything is reachable without a mouse. `?` lists the shortcuts of the page;
   `/` searches it, `g o`/`g q`/`g r`/`g a`/`g u` go to the overview, queues, audit log, alerts and users, `c` switches
   the cluster. In a search field ↓/↑ move through the hits and Enter opens the marked one. In
@@ -166,6 +186,10 @@ alert events older than that are deleted once an hour. Firing alerts and running
 | `WARREN_PEEK_CACHE_MAX_BYTES` | 256 MiB | Memory for peeked message bodies kept for the payload view; oldest go first |
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
 | `WARREN_DLQ_NAME_PATTERN` | see `application.yml` | Regex for name-based DLQ detection |
+| `WARREN_MASKING_ENABLED` | `true` | Hide sensitive values in the message view |
+| `WARREN_MASKING_FIELDS` | `password,passwd,secret,token,apikey,…` | Field and header names to hide, matched as part of the name, ignoring case, `-`, `_` and `.` |
+| `WARREN_MASKING_VALUES` | `EMAIL,IBAN,CARD` | Value patterns hidden wherever they appear |
+| `WARREN_MASKING_ALLOW_REVEAL` | `true` | Operators and admins may show the hidden values of one message |
 
 ### Several clusters, several users
 
@@ -310,6 +334,10 @@ GET  /api/clusters/{c}/queues/{q}/history?range=1h         sampled metrics, rang
 POST /api/clusters/{c}/queues/{q}/replay                   run a replay (OPERATOR)
 POST /api/clusters/{c}/queues/{q}/park                     move messages to {q}.parking (OPERATOR)
 GET  /api/replays?clusterId=&kind=&queue=&requestedBy=&since=&before=   audit log, newest first
+GET  /api/clusters/{c}/queues/{q}/notes                    notes on groups of this queue's dead letters
+PUT  /api/clusters/{c}/queues/{q}/notes                    write a group's note: dimension, groupKey, groupLabel, text (OPERATOR)
+DELETE /api/clusters/{c}/queues/{q}/notes/{id}             remove a note (OPERATOR)
+GET  /api/settings                                         masking settings for the UI
 GET  /api/replays/{id}                                     one replay with per-message outcomes
 GET  /api/replays/{id}/messages/{messageId}                one message as it sat in the queue
 GET  /api/alerts/events?firing=true                        alert events

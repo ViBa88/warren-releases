@@ -3,6 +3,15 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.8.0 (2026-10-02)
+
+- **Payloads you can read.** JSON shows as a tree that folds, as a table of field paths, or raw. Files sent as base64 are recognised by their content and shown as files: PDF and images open or preview, CSV previews as a table, JSON is formatted and flagged when it does not parse, XML and text open as plain text; everything downloads under the name from a field such as `fileName`. Java class names shorten, dates say how long ago, every value can be copied, its path too, or become the search.
+- **Compare messages.** Select two or more and see only the fields that differ, each value with how many messages carry it: "6 of 8 from customer C000105953". Fields unique per message are summarised in one line, files compared by type.
+- **Sensitive values hidden** in the message view: fields and headers named like a password, token, IBAN, e-mail and more, plus anything that looks like an e-mail address, an IBAN or a card number. Operators and admins can show one message's values. Display only; replays, downloads and exports keep the real data. `WARREN_MASKING_ENABLED`, `_FIELDS`, `_VALUES`, `_ALLOW_REVEAL`.
+- **Notes on groups of dead letters.** "Known bug, fix in 4.2, do not replay" on a bar of "why they died": shown on the bar, in every message of the group, and in the replay dialog. Operators write, everyone reads. `GET/PUT /api/clusters/{c}/queues/{q}/notes`.
+- Message details without repeats: one time for a single death, the death history from the second death on, the original route in "why it is here", headers that only repeat an id behind "show all", rare properties under "Details", one panel instead of three.
+- Smaller: the queue page says "6 of 8 shown" while a search narrows the table; tables no longer underline names on hover; text attachments never render in the browser, they open as plain text.
+
 ## 0.7.0 (2026-10-02)
 
 - **Park**: move poison messages to `<queue>.parking` in one step, next to replay and discard. They keep their death history, so a replay from the parking queue later goes to the original route; an optional note goes into the audit log and onto each message. Warren creates the parking queue if it is missing. `POST /api/clusters/{c}/queues/{q}/park`, key `m`.
