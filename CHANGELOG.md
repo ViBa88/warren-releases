@@ -3,6 +3,19 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.10.0 (2026-10-05)
+
+- **Broker disk and memory on the overview.** Every cluster card shows the free disk and memory use of its broker's nodes (each node in the tooltip), a "Broker disk" card says how much can still be written before RabbitMQ blocks every publisher, and a "Largest queues" table lists the queues holding the most bytes. Needs the `monitoring` tag on Warren's RabbitMQ user; without it the card says so.
+- **Alerts before publishers are blocked** (Team, Pro): per node, free disk above `disk_free_limit` below N MB, memory above N % of the high watermark, or a resource alarm that blocks publishers right now. New templates "Disk running low", "Memory high", "Publishers blocked".
+- **Filter the overview by cluster.** Chips on top, kept in the URL and remembered; cards of clusters left out are dimmed, and a cluster left out that fires or is down is still named above the numbers.
+- **Alerts and replay rules follow the cluster in the sidebar**, like the queues and the audit log; rules for every cluster show on each.
+- **Editions count brokers, not cluster entries.** Entries for several vhosts of one broker (same management URL) are one broker. Community: one broker with up to three of its vhosts. Team: three brokers with any number of vhosts. Pro: unlimited.
+- **An hour of history in Community.** Every edition samples the queues now; Community shows the last hour on the queue page and the hour's growth on the overview, and the "empty in" forecast is judged by the depth. Team keeps 7 days, Pro 90.
+- **Four-eyes approval** (Pro): with `WARREN_APPROVAL_ACTIONS=REPLAY,DISCARD,PURGE` these actions wait under **Approvals** until another operator approves them, then run exactly as asked, with requester and approver in the audit log. The requester can withdraw a request, others reject it with a reason, after `WARREN_APPROVAL_EXPIRES_AFTER` (24 h) it expires. The API answers `202` with the request.
+- **Audit log as CSV and in your SIEM** (Pro): `GET /api/replays/export` (per action or per message), and every finished action and approval decision forwarded by webhook (`WARREN_AUDIT_WEBHOOK_URL`, optionally signed) and/or RFC 5424 syslog over UDP, TCP or TLS (`WARREN_AUDIT_SYSLOG_HOST`), in order and kept while the receiver is down. `WARREN_AUDIT_MIN_RETENTION` sets a floor below which nothing is deleted.
+- **90 days of history** (Pro) from hourly roll-ups, `WARREN_METRICS_LONG_RETENTION`; the chart offers 30 and 90 days.
+- A calmer overview: resources as one line per cluster card, no empty alert section, short node names.
+
 ## 0.9.0 (2026-10-05)
 
 - **When is it empty?** The queue list has an "Empty in" column and each queue page says "empty in ≈ 14 min" at the current pace, "growing 3/s" or "not draining". With metrics history (Team, Pro) it is judged by the depth of the last ten minutes, otherwise by the broker's rates. A running replay drains a dead-letter queue like a consumer, so it shows when the replay is done. `GET /api/clusters/{c}/queues/{q}/forecast`.

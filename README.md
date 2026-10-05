@@ -22,11 +22,14 @@ requests and questions are welcome here. Landing page: https://warrenops.io
 
 ## What it does
 
-- **Overview for whoever is on call**: every cluster on one page with its dead letters, unreachable
-  clusters marked, the firing alerts, the queues that gained most messages in the last hour, six or
-  24 hours, and everything Warren did in the last 24 hours. It is the start page; `g o` gets back to it.
-- **Multiple clusters and vhosts.** Configure any number of clusters; the same broker with
-  several vhosts counts as several clusters. Switch between them in the top bar.
+- **Overview for whoever is on call**: every cluster on one page with its dead letters, free disk
+  and memory of its broker, unreachable clusters marked, the firing alerts, the queues that gained
+  most messages in the last hour, six or 24 hours, the largest queues, and everything Warren did in
+  the last 24 hours. Narrow it to some clusters with the chips on top; a cluster left out that fires
+  or is down is still named. It is the start page; `g o` gets back to it.
+- **Multiple clusters and vhosts.** Configure any number of cluster entries, one per broker and
+  vhost; entries for several vhosts of one broker count as one broker for the edition limits.
+  Switch between them in the sidebar; the queues, audit log, alerts and replay rules follow it.
 - **Queue overview** with dead-letter queues detected automatically (by bindings to a
   dead-letter exchange, or by name pattern) and sorted to the top, plus a bell on queues
   with a firing alert. Empty retry wait queues stay out of the way until you ask for them or
@@ -76,13 +79,6 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   the filters stay in the URL, so a filtered view can be shared. Each message can be opened as it sat in the queue: why it died,
   properties, headers, death history and the first 16 KiB of its body (for an edited message
   also what was published instead). Configure the kept head with `WARREN_AUDIT_PAYLOAD_BYTES`.
-- **When is it empty?** The queue list has an "Empty in" column and the queue page says
-  "empty in ≈ 14 min" at the current pace, "growing 3/s", or "not draining". With metrics history
-  (Team, Pro) it is judged by the depth of the last ten minutes, otherwise by the broker's rates
-  (acknowledged minus published). A running replay drains a dead-letter queue the same way, so it
-  shows when the replay will be done. `GET /api/clusters/{c}/queues/{q}/forecast`.
-- **Choose the columns of the queue list**: hide what you do not need. Ready is hidden by default,
-  since it equals Messages whenever nothing is being processed.
 - **Payloads you can read**: JSON as a tree that folds (large payloads open on two levels), as a
   table of field paths, or raw. Files sent as base64 are recognised by their content and shown as
   files: PDF and images open in a tab or preview inline, CSV previews as a table, JSON formatted,
@@ -91,6 +87,13 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   value can be copied, its path too, or become the search ("show the messages with this value").
 - **Compare messages**: select two or more, and Warren lists only the payload fields that differ,
   each value with how many messages carry it; fields unique per message (ids) in one line.
+- **When is it empty?** The queue list has an "Empty in" column and the queue page says
+  "empty in ≈ 14 min" at the current pace, "growing 3/s", or "not draining". It is judged by the
+  depth of the last ten minutes, or by the broker's rates while there is no history yet
+  (acknowledged minus published). A running replay drains a dead-letter queue the same way, so it
+  shows when the replay will be done. `GET /api/clusters/{c}/queues/{q}/forecast`.
+- **Choose the columns of the queue list**: hide what you do not need. Ready is hidden by default,
+  since it equals Messages whenever nothing is being processed.
 - **Sensitive values hidden** in the message view: JSON fields and headers whose name contains
   `password`, `token`, `apikey`, `iban`, `email` and the like, plus anything that looks like an e-mail
   address, an IBAN or a card number (Luhn-checked) inside payloads, headers and exception texts.
@@ -110,12 +113,22 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   and `p` replay, discard and publish. Dialogs submit with ⌘/Ctrl+Enter and pick options with
   Alt and the underlined letter. `f` puts a letter on every visible button and field, and ⌘K
   runs the page's actions too.
+- **Broker resources**: the overview shows each cluster's free disk and memory use in its card
+  (per node in the tooltip) and the queues holding the most bytes. RabbitMQ blocks every publisher
+  of the cluster once a node has less free disk than `disk_free_limit` or uses more memory than
+  its high watermark; a dead-letter queue that grows unnoticed is a common way to get there.
+  Reading the nodes needs the `monitoring` tag on Warren's RabbitMQ user; without it the card says so.
 - **Metrics history**: every queue is sampled periodically (default 30 s, 7 days retention).
-  The queue page shows messages, ready, unacked and consumers over 15 minutes to 7 days.
-- **Alerting**: rules match queues by regex on one or all clusters. Conditions: messages
+  The queue page shows messages, ready, unacked and consumers over the last hour (Community),
+  up to 7 days (Team) or 90 days (Pro).
+- **Alerting**: rules match queues by regex on one or all clusters. A new rule starts from a
+  template (dead letters piling up, a growing dead-letter queue, consumers gone, mass failure) with the
+  queue pattern read off the cluster's naming convention. Conditions: messages
   above a threshold, no consumers while messages wait, growth within a time window, inflow
   above a rate per minute (on a dead-letter queue: the dead-letter rate, which shows a mass
-  failure even while a replay rule keeps draining the queue). Each can
+  failure even while a replay rule keeps draining the queue). Per broker node: free disk above
+  the limit below N MB, memory above N % of the limit, publishers blocked by a resource alarm
+  (templates "Disk running low", "Memory high", "Publishers blocked"). Each can
   require the condition to hold for a number of seconds. Notifications go to Slack, Microsoft
   Teams or any JSON webhook; firing alerts are re-notified after a configurable interval and
   a resolved notification follows when the queue recovers.
@@ -174,6 +187,8 @@ under a gigabyte; with a thousand queues plan for a few gigabytes and use Postgr
 `WARREN_METRICS_SAMPLE_INTERVAL`. The audit log is kept forever unless `WARREN_AUDIT_RETENTION`
 is set (for example `90d`); then finished actions with their per-message records and resolved
 alert events older than that are deleted once an hour. Firing alerts and running replays stay.
+With Pro the samples are also rolled up into one row per queue and hour, kept for
+`WARREN_METRICS_LONG_RETENTION` (90 days), for the 30 and 90 day history: about 2,200 rows per queue.
 
 ### One cluster, environment variables
 
@@ -181,7 +196,7 @@ alert events older than that are deleted once an hour. Firing alerts and running
 |---|---|---|
 | `WARREN_RABBIT_MANAGEMENT_URL` | `http://localhost:15672` | Management HTTP API |
 | `WARREN_RABBIT_HOST` / `WARREN_RABBIT_PORT` | `localhost` / `5672` | AMQP endpoint used for replay |
-| `WARREN_RABBIT_USERNAME` / `WARREN_RABBIT_PASSWORD` | `guest` / `guest` | Needs `management` tag plus read/write on the vhost |
+| `WARREN_RABBIT_USERNAME` / `WARREN_RABBIT_PASSWORD` | `guest` / `guest` | Needs `management` tag plus read/write on the vhost; `monitoring` for disk and memory of the nodes |
 | `WARREN_RABBIT_VHOST` | `/` | The vhost this cluster entry covers |
 | `WARREN_RABBIT_ID` / `WARREN_RABBIT_NAME` | `default` / – | Id used in URLs, display name |
 | `WARREN_DB_URL` / `_USERNAME` / `_PASSWORD` | embedded H2 in `WARREN_DATA_DIR` | Audit log, users, metrics, alerts; set a `jdbc:postgresql://` URL for Postgres |
@@ -191,6 +206,12 @@ alert events older than that are deleted once an hour. Firing alerts and running
 | `WARREN_PUBLIC_URL` | – | Base URL used for links in notifications |
 | `WARREN_METRICS_SAMPLE_INTERVAL` / `WARREN_METRICS_RETENTION` | `30s` / `7d` | Sampling and history retention |
 | `WARREN_AUDIT_RETENTION` | `0` (forever) | Age after which finished actions and resolved alert events are deleted, e.g. `90d` |
+| `WARREN_AUDIT_MIN_RETENTION` | `0` | Pro: nothing younger is ever deleted; a shorter `WARREN_AUDIT_RETENTION` stops Warren at startup |
+| `WARREN_AUDIT_WEBHOOK_URL` | – | Pro: every audit event as a JSON POST, see [Audit export and forwarding](#audit-export-and-forwarding-pro) |
+| `WARREN_AUDIT_SYSLOG_HOST` / `_PORT` / `_PROTOCOL` | – / `514` / `UDP` | Pro: every audit event as an RFC 5424 syslog message, `UDP`, `TCP` or `TLS` |
+| `WARREN_APPROVAL_ACTIONS` | – | Pro: `REPLAY,DISCARD,PURGE` or a part of it wait for a second operator, see [Four-eyes approval](#four-eyes-approval-pro) |
+| `WARREN_APPROVAL_EXPIRES_AFTER` | `24h` | Pro: a request nobody decided on expires |
+| `WARREN_METRICS_LONG_RETENTION` | `90d` | Pro: hourly roll-ups behind the 30 and 90 day history |
 | `WARREN_PEEK_CACHE_MAX_BYTES` | 256 MiB | Memory for peeked message bodies kept for the payload view; oldest go first |
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
 | `WARREN_DLQ_NAME_PATTERN` | see `application.yml` | Regex for name-based DLQ detection |
@@ -262,15 +283,21 @@ a valid key switches it to **Team** or **Pro** at runtime, no restart.
 | | Community | Team | Pro |
 |---|---|---|---|
 | Browse, search, replay, park, discard, purge, publish, audit log, local users, keyboard | yes | yes | yes |
-| Clusters and vhosts | the first configured one | up to 3 | unlimited, one flat price per installation |
-| Roles viewer / operator / admin | every local user is admin | yes | yes |
-| Metrics history and alerting | off (endpoints answer 402) | yes | yes |
+| Brokers | the first configured one, up to 3 of its vhosts | up to 3, any number of vhosts | unlimited, one flat price per installation |
+| Roles viewer / operator / admin | every local user is admin (and may show masked values) | yes | yes |
+| Metrics history | the last hour | 15 minutes to 7 days | up to 90 days |
+| Alerting and replay rules | off (endpoints answer 402) | yes | yes |
 | OIDC single sign-on | off | off | yes |
+| Four-eyes approval for replay, discard, purge | off | off | yes |
+| Audit export (CSV), forwarding to a SIEM, minimum retention | off | off | yes |
 | Database | embedded (one container, one volume) | embedded | embedded or your own PostgreSQL |
 
-A key may carry its own cluster cap for special deals; the edition sits in the signed key.
+A key may carry its own broker cap for special deals; the edition sits in the signed key.
 
-Clusters beyond the edition's limit stay configured but inactive; the UI shows how many. Stored user
+Limits count brokers, not cluster entries: entries that differ only in the vhost (same management URL)
+are one broker. Entries beyond the edition's limit stay configured but inactive; the UI shows how many.
+In Community, raw samples are kept for two hours, enough for the hour it shows; with a licence for
+`WARREN_METRICS_RETENTION`. Stored user
 roles are kept and take effect at the next sign-in once a licence is installed.
 
 Install a key under **Edition & licence** (topbar badge) as admin, or supply it through
@@ -281,6 +308,36 @@ Warren back to Community with a warning in the UI.
 
 `GET /api/edition` returns the current state; a call the edition lacks answers
 `402 Payment Required` with the feature and the edition that has it.
+
+### Four-eyes approval (Pro)
+
+With `WARREN_APPROVAL_ACTIONS=REPLAY,DISCARD,PURGE` (or a part of it) these actions do not run when an
+operator asks for them. The request is checked as if it ran (queue, target, delivery limit, throttle) and
+then waits under **Approvals** with a one-line summary; the API answers `202` with `{"approval": …}`
+instead of `201` and the action. Another user with the operator role approves it, and it runs exactly as
+asked, in the requester's name with the approver recorded next to it (`approvedBy` in the audit log). The
+requester may withdraw it, others may reject it with a reason; after `WARREN_APPROVAL_EXPIRES_AFTER` it
+expires. A purge removes what is in the queue at approval time. Replay rules are not affected: an admin
+sets them up to run without anyone at hand.
+
+### Audit export and forwarding (Pro)
+
+`GET /api/replays/export` returns the audit log as CSV with the filters of the list, one row per action or
+with `messages=true` one per message (no payloads), at most 100,000 actions. Text a spreadsheet would run
+as a formula is prefixed with `'`.
+
+With `WARREN_AUDIT_WEBHOOK_URL` and/or `WARREN_AUDIT_SYSLOG_HOST` every finished action and every approval
+decision is forwarded as it happens: `action.finished`, `approval.requested`, `.approved`, `.rejected`,
+`.cancelled`, `.expired`, `.failed`. Each event is JSON with `id`, `type`, `at`, `source` and the `action` or
+`approval`. Events are written to an outbox in the transaction that records them and sent in order; a
+receiver that is down holds them until it is back. Delivery is at least once, so deduplicate by `id`.
+The webhook carries `X-Warren-Event`, `X-Warren-Delivery`, `X-Warren-Timestamp`, an optional static header
+(`WARREN_AUDIT_WEBHOOK_HEADER_NAME` / `_VALUE`) and with `WARREN_AUDIT_WEBHOOK_SIGNING_SECRET`
+`X-Warren-Signature: sha256=<hmac of "timestamp.body">`. Syslog messages are RFC 5424 with the event type as
+MSGID, facility `WARREN_AUDIT_SYSLOG_FACILITY` (16, local0), severity notice, warning for failed actions.
+
+`WARREN_AUDIT_MIN_RETENTION` (e.g. `365d`) is the floor for the retention: nothing younger is deleted, and a
+`WARREN_AUDIT_RETENTION` below it stops Warren at startup with a clear message.
 
 ## Roles
 
@@ -338,15 +395,18 @@ GET  /api/overview?growth=1h                               all clusters, firing 
 GET  /api/clusters                                         configured clusters with reachability
 GET  /api/clusters/{c}/queues                              queues with dead-letter classification
 GET  /api/clusters/{c}/queues/{q}/messages?limit=          peek at messages (max 200)
-GET  /api/clusters/{c}/queues/{q}/history?range=1h         sampled metrics, range 15m…30d
+GET  /api/clusters/{c}/queues/{q}/history?range=1h         sampled metrics, range 15m…7d, up to 90d with Pro
 GET  /api/clusters/{c}/queues/{q}/forecast                 when the queue is empty at the current pace
-POST /api/clusters/{c}/queues/{q}/replay                   run a replay (OPERATOR)
+POST /api/clusters/{c}/queues/{q}/replay                   run a replay (OPERATOR); 202 when it waits for approval
 POST /api/clusters/{c}/queues/{q}/park                     move messages to {q}.parking (OPERATOR)
 GET  /api/replays?clusterId=&kind=&queue=&requestedBy=&since=&before=   audit log, newest first
+GET  /api/replays/export?…&messages=                       audit log as CSV (Pro)
+GET  /api/approvals?status=, GET /api/approvals/{id}       requests waiting for a second person (Pro)
+POST /api/approvals/{id}/approve|reject|cancel             decide: approve runs it, reject needs a note, cancel is the requester's (OPERATOR)
 GET  /api/clusters/{c}/queues/{q}/notes                    notes on groups of this queue's dead letters
 PUT  /api/clusters/{c}/queues/{q}/notes                    write a group's note: dimension, groupKey, groupLabel, text (OPERATOR)
 DELETE /api/clusters/{c}/queues/{q}/notes/{id}             remove a note (OPERATOR)
-GET  /api/settings                                         masking settings for the UI
+GET  /api/settings                                         masking, approval and audit settings for the UI
 GET  /api/replays/{id}                                     one replay with per-message outcomes
 GET  /api/replays/{id}/messages/{messageId}                one message as it sat in the queue
 GET  /api/alerts/events?firing=true                        alert events
@@ -383,8 +443,8 @@ optional; with it the replay is throttled and runs in the background (see above)
 
 ## Roadmap
 
-Four-eyes approval for replays, message editing for several messages at once, e-mail as a
-notification channel, per-cluster permissions, export of the audit log.
+Message editing for several messages at once, e-mail as a notification channel, per-cluster
+permissions.
 
 ## License
 
