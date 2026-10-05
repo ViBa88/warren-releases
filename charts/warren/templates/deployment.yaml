@@ -1,0 +1,173 @@
+{{- $fullname := include "warren.fullname" . -}}
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.externalDatabase.enabled) }}
+{{- fail "replicaCount above 1 needs externalDatabase (Pro): the embedded database belongs to one instance" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "warren.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- if not .Values.externalDatabase.enabled }}
+  # the embedded database is a file on the volume: the old pod has to stop before the new one opens it
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "warren.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "warren.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "warren.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: warren
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.javaOpts | quote }}
+            - name: WARREN_DATA_DIR
+              value: /app/data
+            - name: WARREN_ADMIN_USERNAME
+              value: {{ .Values.admin.username | quote }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_ADMIN_PASSWORD" "ctx" . "existingSecret" .Values.admin.existingSecret "key" .Values.admin.existingSecretKey) | nindent 12 }}
+            {{- if .Values.clusters }}
+            {{- range $i, $c := .Values.clusters }}
+            - name: WARREN_CLUSTERS_{{ $i }}_ID
+              value: {{ required "clusters[].id is required" $c.id | quote }}
+            - name: WARREN_CLUSTERS_{{ $i }}_NAME
+              value: {{ $c.name | default $c.id | quote }}
+            - name: WARREN_CLUSTERS_{{ $i }}_MANAGEMENT_URL
+              value: {{ required "clusters[].managementUrl is required" $c.managementUrl | quote }}
+            - name: WARREN_CLUSTERS_{{ $i }}_HOST
+              value: {{ required "clusters[].host is required" $c.host | quote }}
+            - name: WARREN_CLUSTERS_{{ $i }}_PORT
+              value: {{ $c.port | default 5672 | quote }}
+            - name: WARREN_CLUSTERS_{{ $i }}_VHOST
+              value: {{ $c.vhost | default "/" | quote }}
+            - name: WARREN_CLUSTERS_{{ $i }}_USERNAME
+              value: {{ required "clusters[].username is required" $c.username | quote }}
+            {{- include "warren.secretEnv" (dict "name" (printf "WARREN_CLUSTERS_%d_PASSWORD" $i) "ctx" $ "existingSecret" $c.existingSecret "key" ($c.existingSecretKey | default (printf "cluster-%d-password" $i))) | nindent 12 }}
+            {{- end }}
+            {{- else }}
+            - name: WARREN_RABBIT_ID
+              value: {{ .Values.rabbitmq.id | quote }}
+            {{- with .Values.rabbitmq.name }}
+            - name: WARREN_RABBIT_NAME
+              value: {{ . | quote }}
+            {{- end }}
+            - name: WARREN_RABBIT_MANAGEMENT_URL
+              value: {{ .Values.rabbitmq.managementUrl | quote }}
+            - name: WARREN_RABBIT_HOST
+              value: {{ .Values.rabbitmq.host | quote }}
+            - name: WARREN_RABBIT_PORT
+              value: {{ .Values.rabbitmq.port | quote }}
+            - name: WARREN_RABBIT_VHOST
+              value: {{ .Values.rabbitmq.vhost | quote }}
+            - name: WARREN_RABBIT_USERNAME
+              value: {{ .Values.rabbitmq.username | quote }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_RABBIT_PASSWORD" "ctx" . "existingSecret" .Values.rabbitmq.existingSecret "key" .Values.rabbitmq.existingSecretKey) | nindent 12 }}
+            {{- end }}
+            {{- if or .Values.license.key .Values.license.existingSecret }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_LICENSE_KEY" "ctx" . "existingSecret" .Values.license.existingSecret "key" .Values.license.existingSecretKey) | nindent 12 }}
+            {{- end }}
+            {{- with .Values.publicUrl }}
+            - name: WARREN_PUBLIC_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.externalDatabase.enabled }}
+            - name: WARREN_DB_URL
+              value: {{ required "externalDatabase.url is required" .Values.externalDatabase.url | quote }}
+            - name: WARREN_DB_USERNAME
+              value: {{ .Values.externalDatabase.username | quote }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_DB_PASSWORD" "ctx" . "existingSecret" .Values.externalDatabase.existingSecret "key" .Values.externalDatabase.existingSecretKey) | nindent 12 }}
+            {{- end }}
+            {{- if .Values.oidc.enabled }}
+            - name: WARREN_OIDC_ENABLED
+              value: "true"
+            - name: WARREN_OIDC_ISSUER_URI
+              value: {{ required "oidc.issuerUri is required" .Values.oidc.issuerUri | quote }}
+            - name: WARREN_OIDC_CLIENT_ID
+              value: {{ required "oidc.clientId is required" .Values.oidc.clientId | quote }}
+            - name: WARREN_OIDC_ROLES_CLAIM
+              value: {{ .Values.oidc.rolesClaim | quote }}
+            - name: WARREN_OIDC_DEFAULT_ROLE
+              value: {{ .Values.oidc.defaultRole | quote }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_OIDC_CLIENT_SECRET" "ctx" . "existingSecret" .Values.oidc.existingSecret "key" .Values.oidc.existingSecretKey) | nindent 12 }}
+            {{- end }}
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if and .Values.persistence.enabled (not .Values.externalDatabase.enabled) }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default $fullname }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

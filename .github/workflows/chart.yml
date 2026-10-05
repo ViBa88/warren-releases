@@ -1,0 +1,61 @@
+# Lints the Helm chart, installs it into a throw-away kind cluster against a real RabbitMQ, and on main
+# publishes a new chart version to oci://ghcr.io/viba88/charts/warren (listed on Artifact Hub).
+name: Helm chart
+on:
+  pull_request:
+    paths: ["charts/**", ".github/workflows/chart.yml"]
+  push:
+    branches: [main]
+    paths: ["charts/**", ".github/workflows/chart.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint charts/warren --strict
+      - uses: helm/kind-action@v1
+      - name: RabbitMQ for the test
+        run: |
+          kubectl apply -f charts/warren/ci/rabbitmq.yaml
+          kubectl rollout status deploy/rabbitmq --timeout=180s
+      - name: Install the chart
+        run: |
+          helm install warren charts/warren --set rabbitmq.password=ci-only-password --set admin.password=ci-only-admin --wait --timeout 5m
+          kubectl get pods
+      - name: Health, sign-in and the cluster
+        run: |
+          kubectl port-forward svc/warren 8080:8080 >/dev/null 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8080/actuator/health && break; sleep 2; done
+          curl -sf -c jar -H 'Content-Type: application/json' -d '{"username":"admin","password":"ci-only-admin"}' localhost:8080/api/auth/login
+          curl -sf -b jar localhost:8080/api/clusters | tee clusters.json
+          grep -q '"reachable":true' clusters.json
+      - name: An upgrade keeps the volume
+        run: |
+          helm upgrade warren charts/warren --reuse-values --set env.WARREN_AUDIT_RETENTION=90d --wait --timeout 5m
+          kubectl get pvc warren
+      - if: failure()
+        run: kubectl describe pods; kubectl logs deploy/warren --tail=200
+
+  publish:
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Push the chart unless this version is out already
+        run: |
+          version=$(awk '/^version:/ {print $2}' charts/warren/Chart.yaml)
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          if helm show chart oci://ghcr.io/viba88/charts/warren --version "$version" >/dev/null 2>&1; then
+            echo "warren $version is published already"; exit 0
+          fi
+          helm package charts/warren
+          helm push "warren-$version.tgz" oci://ghcr.io/viba88/charts
