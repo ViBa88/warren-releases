@@ -32,6 +32,8 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "warren.serviceAccountName" . }}
+      # Kubernetes would set WARREN_PORT=tcp://… for a Service named warren, which Warren reads as its HTTP port
+      enableServiceLinks: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
