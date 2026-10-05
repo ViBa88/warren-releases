@@ -16,7 +16,8 @@ Watch it with controls on YouTube: [Replay RabbitMQ dead letters without a scrip
 
 This is Warren's public home: the README, the compose files, the [changelog](CHANGELOG.md),
 [issues](../../issues) and [discussions](../../discussions). Warren ships as a ready-to-run
-container image, `ghcr.io/viba88/warren`; its source code is not published. Bug reports, feature
+container image, `ghcr.io/viba88/warren` and on Docker Hub as
+[`viba88/warren`](https://hub.docker.com/r/viba88/warren); its source code is not published. Bug reports, feature
 requests and questions are welcome here. Landing page: https://warrenops.io
 
 ## What it does
@@ -75,6 +76,13 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   the filters stay in the URL, so a filtered view can be shared. Each message can be opened as it sat in the queue: why it died,
   properties, headers, death history and the first 16 KiB of its body (for an edited message
   also what was published instead). Configure the kept head with `WARREN_AUDIT_PAYLOAD_BYTES`.
+- **When is it empty?** The queue list has an "Empty in" column and the queue page says
+  "empty in ≈ 14 min" at the current pace, "growing 3/s", or "not draining". With metrics history
+  (Team, Pro) it is judged by the depth of the last ten minutes, otherwise by the broker's rates
+  (acknowledged minus published). A running replay drains a dead-letter queue the same way, so it
+  shows when the replay will be done. `GET /api/clusters/{c}/queues/{q}/forecast`.
+- **Choose the columns of the queue list**: hide what you do not need. Ready is hidden by default,
+  since it equals Messages whenever nothing is being processed.
 - **Payloads you can read**: JSON as a tree that folds (large payloads open on two levels), as a
   table of field paths, or raw. Files sent as base64 are recognised by their content and shown as
   files: PDF and images open in a tab or preview inline, CSV previews as a table, JSON formatted,
@@ -331,6 +339,7 @@ GET  /api/clusters                                         configured clusters w
 GET  /api/clusters/{c}/queues                              queues with dead-letter classification
 GET  /api/clusters/{c}/queues/{q}/messages?limit=          peek at messages (max 200)
 GET  /api/clusters/{c}/queues/{q}/history?range=1h         sampled metrics, range 15m…30d
+GET  /api/clusters/{c}/queues/{q}/forecast                 when the queue is empty at the current pace
 POST /api/clusters/{c}/queues/{q}/replay                   run a replay (OPERATOR)
 POST /api/clusters/{c}/queues/{q}/park                     move messages to {q}.parking (OPERATOR)
 GET  /api/replays?clusterId=&kind=&queue=&requestedBy=&since=&before=   audit log, newest first

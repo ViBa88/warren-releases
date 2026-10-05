@@ -3,6 +3,13 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.9.0 (2026-10-05)
+
+- **When is it empty?** The queue list has an "Empty in" column and each queue page says "empty in ≈ 14 min" at the current pace, "growing 3/s" or "not draining". With metrics history (Team, Pro) it is judged by the depth of the last ten minutes, otherwise by the broker's rates. A running replay drains a dead-letter queue like a consumer, so it shows when the replay is done. `GET /api/clusters/{c}/queues/{q}/forecast`.
+- **Choose the columns of the queue list.** Hide what you do not need; Ready is hidden by default, since it equals Messages whenever consumers hold nothing.
+- **Docker Hub:** the image is also published as `viba88/warren`, with the same tags as `ghcr.io/viba88/warren`.
+- A group filter whose group is gone after a reload (all parked, replayed or discarded) is cleared instead of leaving an empty table; the group filter chip no longer pushes the queue toolbar onto two lines.
+
 ## 0.8.0 (2026-10-02)
 
 - **Payloads you can read.** JSON shows as a tree that folds, as a table of field paths, or raw. Files sent as base64 are recognised by their content and shown as files: PDF and images open or preview, CSV previews as a table, JSON is formatted and flagged when it does not parse, XML and text open as plain text; everything downloads under the name from a field such as `fileName`. Java class names shorten, dates say how long ago, every value can be copied, its path too, or become the search.
