@@ -3,6 +3,15 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.11.0 (2026-10-05)
+
+- **MassTransit understood.** `<endpoint>_error` and `_skipped` queues count as dead-letter queues. The message view reads the exception, the consumer and the retry count from MassTransit's `MT-Fault-*` headers, groups by exception, and says in one sentence which consumer faulted after how many retries. A replay goes back to the endpoint's exchange with `MT-Fault-*`, `MT-Reason` and `MT-Redelivery-Count` removed and the envelope untouched.
+- **Room before publishers are blocked**, on every cluster card instead of the free disk, as a yellow or red band when it gets tight; the Broker disk card says "blocked" during an alarm. Below the limit an alert says how far.
+- **One node alert per broker:** cluster entries for several vhosts of one broker no longer raise the same disk or memory alert once per vhost.
+- **The new UI right after an upgrade:** the page is revalidated on every load and the hashed bundles cached for a year, so browsers no longer keep the old UI against a new Warren.
+- **Helm chart** for Kubernetes: `helm install warren oci://ghcr.io/viba88/charts/warren`. On Kubernetes outside the chart: a Service named `warren` makes Kubernetes set `WARREN_PORT` in every pod; set `enableServiceLinks: false` or name the Service differently.
+- A single cluster without `WARREN_RABBIT_NAME` is shown by its id instead of an empty name.
+
 ## 0.10.0 (2026-10-05)
 
 - **Broker disk and memory on the overview.** Every cluster card shows the free disk and memory use of its broker's nodes (each node in the tooltip), a "Broker disk" card says how much can still be written before RabbitMQ blocks every publisher, and a "Largest queues" table lists the queues holding the most bytes. Needs the `monitoring` tag on Warren's RabbitMQ user; without it the card says so.

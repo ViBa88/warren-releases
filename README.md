@@ -35,6 +35,11 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   with a firing alert. Empty retry wait queues stay out of the way until you ask for them or
   search by name. Parking queues are tagged `PARKED`, quorum queues whose peeks count as
   deliveries `LIMIT`.
+- **Spring and MassTransit understood.** Besides the broker's `x-death`, Warren reads the
+  `x-exception-*` and `x-original-*` headers of Spring AMQP's `RepublishMessageRecoverer`, and
+  MassTransit's `<endpoint>_error` and `_skipped` queues with their `MT-Fault-*` headers: exception,
+  consumer and retry count in the message view, a replay back to the endpoint's exchange with the
+  fault and redelivery headers removed.
 - **Message browser**: peek at messages without consuming them, see payload (pretty JSON),
   headers, and the complete `x-death` history: which queue rejected it, how often, when. A message a
   consumer republished itself carries no death time; "dead since" then shows how long Warren has seen
@@ -202,7 +207,7 @@ With Pro the samples are also rolled up into one row per queue and hour, kept fo
 | `WARREN_DB_URL` / `_USERNAME` / `_PASSWORD` | embedded H2 in `WARREN_DATA_DIR` | Audit log, users, metrics, alerts; set a `jdbc:postgresql://` URL for Postgres |
 | `WARREN_DATA_DIR` | `/app/data` (image) / `./data` | Directory of the embedded database |
 | `WARREN_ADMIN_USERNAME` / `WARREN_ADMIN_PASSWORD` | `admin` / `admin` | The single local admin. Change it. |
-| `WARREN_PORT` | `8080` | HTTP port |
+| `WARREN_PORT` | `8080` | HTTP port. On Kubernetes a Service named `warren` makes Kubernetes set `WARREN_PORT=tcp://…` in every pod of the namespace; set `enableServiceLinks: false` on the pod (the Helm chart does) or name the Service differently |
 | `WARREN_PUBLIC_URL` | – | Base URL used for links in notifications |
 | `WARREN_METRICS_SAMPLE_INTERVAL` / `WARREN_METRICS_RETENTION` | `30s` / `7d` | Sampling and history retention |
 | `WARREN_AUDIT_RETENTION` | `0` (forever) | Age after which finished actions and resolved alert events are deleted, e.g. `90d` |
@@ -214,7 +219,7 @@ With Pro the samples are also rolled up into one row per queue and hour, kept fo
 | `WARREN_METRICS_LONG_RETENTION` | `90d` | Pro: hourly roll-ups behind the 30 and 90 day history |
 | `WARREN_PEEK_CACHE_MAX_BYTES` | 256 MiB | Memory for peeked message bodies kept for the payload view; oldest go first |
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
-| `WARREN_DLQ_NAME_PATTERN` | see `application.yml` | Regex for name-based DLQ detection |
+| `WARREN_DLQ_NAME_PATTERN` | `dlq`, `dlx`, `dead-letter`, `.dead`, `.failed`, `_error`, `_skipped` | Regex for name-based DLQ detection, see `application.yml` |
 | `WARREN_MASKING_ENABLED` | `true` | Hide sensitive values in the message view |
 | `WARREN_MASKING_FIELDS` | `password,passwd,secret,token,apikey,…` | Field and header names to hide, matched as part of the name, ignoring case, `-`, `_` and `.` |
 | `WARREN_MASKING_VALUES` | `EMAIL,IBAN,CARD` | Value patterns hidden wherever they appear |
