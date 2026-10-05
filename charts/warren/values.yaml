@@ -1,0 +1,144 @@
+# Warren on Kubernetes. The defaults run the Community edition against one RabbitMQ with the
+# embedded database on a persistent volume. Everything below maps to Warren's WARREN_* settings,
+# documented in https://github.com/ViBa88/warren-releases#readme.
+
+image:
+  repository: ghcr.io/viba88/warren
+  # defaults to the chart's appVersion
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# The RabbitMQ Warren watches. Its user needs the management tag and read/write on the vhost,
+# plus the monitoring tag for disk and memory of the nodes.
+rabbitmq:
+  managementUrl: http://rabbitmq:15672
+  host: rabbitmq
+  port: 5672
+  vhost: /
+  username: warren
+  # Either a password here (stored in the chart's Secret), or an existing Secret with the key below.
+  password: ""
+  existingSecret: ""
+  existingSecretKey: rabbitmq-password
+  # Id and display name of this cluster entry in Warren
+  id: default
+  name: ""
+
+# More brokers or vhosts (Team, Pro). When set, `rabbitmq` above is ignored. Each entry:
+#   - id: prod-orders
+#     name: prod-eu
+#     managementUrl: http://rabbitmq.prod:15672
+#     host: rabbitmq.prod
+#     port: 5672
+#     vhost: orders
+#     username: warren
+#     password: ""                     # or:
+#     existingSecret: rabbit-prod      # Secret holding the password
+#     existingSecretKey: password
+clusters: []
+
+# The first administrator. Further users are managed in the UI.
+admin:
+  username: admin
+  # Leave empty to have the chart generate one; read it with the command in the NOTES.
+  password: ""
+  existingSecret: ""
+  existingSecretKey: admin-password
+
+# Team or Pro licence key; empty runs Community.
+license:
+  key: ""
+  existingSecret: ""
+  existingSecretKey: license-key
+
+# Base URL users open Warren at, for links in alert notifications.
+publicUrl: ""
+
+# The embedded database lives on this volume. One replica only while it is used.
+persistence:
+  enabled: true
+  size: 2Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  existingClaim: ""
+
+# Pro: an external PostgreSQL instead of the embedded database; then several replicas work.
+externalDatabase:
+  enabled: false
+  url: ""            # jdbc:postgresql://postgres:5432/warren
+  username: warren
+  password: ""
+  existingSecret: ""
+  existingSecretKey: database-password
+
+replicaCount: 1
+
+# Pro: sign-in through an OIDC provider.
+oidc:
+  enabled: false
+  issuerUri: ""
+  clientId: ""
+  clientSecret: ""
+  existingSecret: ""
+  existingSecretKey: oidc-client-secret
+  rolesClaim: roles
+  defaultRole: VIEWER
+
+# Any other WARREN_* setting, e.g. WARREN_AUDIT_RETENTION: 90d or WARREN_APPROVAL_ACTIONS: REPLAY,DISCARD,PURGE
+env: {}
+# Further env entries in Kubernetes syntax, e.g. from Secrets
+extraEnv: []
+
+javaOpts: "-XX:MaxRAMPercentage=75"
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: warren.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 768Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+nameOverride: ""
+fullnameOverride: ""

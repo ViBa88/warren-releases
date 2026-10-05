@@ -1,0 +1,19 @@
+Warren {{ .Chart.AppVersion }} is starting.
+
+Open it:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "warren.fullname" . }} 8080:{{ .Values.service.port }}
+  then http://localhost:8080
+{{- end }}
+
+Sign in as {{ .Values.admin.username }}.{{ if not .Values.admin.password }} The password:
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Values.admin.existingSecret | default (include "warren.fullname" .) }} -o jsonpath='{.data.{{ .Values.admin.existingSecretKey }}}' | base64 -d; echo
+{{- end }}
+{{- if not (or .Values.license.key .Values.license.existingSecret) }}
+
+This is the Community edition: one broker with up to three vhosts, free. Team and Pro: https://warrenops.io/#pricing
+{{- end }}

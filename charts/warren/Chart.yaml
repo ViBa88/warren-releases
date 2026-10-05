@@ -1,0 +1,40 @@
+apiVersion: v2
+name: warren
+description: Dead-letter operations console for RabbitMQ. Browse, explain and replay dead letters, with an audit log.
+type: application
+version: 0.1.0
+appVersion: "0.10.0"
+home: https://warrenops.io
+icon: https://raw.githubusercontent.com/ViBa88/warren-releases/main/docs/warren-logo.svg
+sources:
+  - https://github.com/ViBa88/warren-releases
+keywords:
+  - rabbitmq
+  - dead-letter-queue
+  - dlq
+  - amqp
+  - messaging
+  - replay
+  - observability
+maintainers:
+  - name: Warren
+    url: https://warrenops.io
+annotations:
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/license: LicenseRef-Warren
+  artifacthub.io/links: |
+    - name: Website
+      url: https://warrenops.io
+    - name: Documentation
+      url: https://github.com/ViBa88/warren-releases#readme
+    - name: Changelog
+      url: https://github.com/ViBa88/warren-releases/blob/main/CHANGELOG.md
+  artifacthub.io/images: |
+    - name: warren
+      image: ghcr.io/viba88/warren:0.10.0
+      platforms:
+        - linux/amd64
+        - linux/arm64
+  artifacthub.io/changes: |
+    - kind: added
+      description: First chart, for Warren 0.10
