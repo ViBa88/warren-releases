@@ -37,6 +37,16 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   with a firing alert. Empty retry wait queues stay out of the way until you ask for them or
   search by name. Parking queues are tagged `PARKED`, quorum queues whose peeks count as
   deliveries `LIMIT`.
+- **Failures across queues**: one list of what fails in the whole cluster entry, the same exception
+  in several dead-letter queues as one row with each queue's count (from the first 200 messages of
+  each), and a replay of that failure in every queue at once, to the original routes.
+- **Set-up checks and a dead-letter map**: the queue list names what loses or endangers dead
+  letters, with the fix: queues with consumers but no dead-letter exchange, a dead-letter exchange
+  that does not exist or routes nowhere, quorum DLQs with a delivery limit, DLQs no alert rule
+  watches. The dead-letter map draws where each cluster's dead letters go, retry loops and parking
+  queues included, broken links in red.
+- **Compressed bodies readable**: a message with `content_encoding` `gzip` or `deflate` is shown
+  unpacked (search, compare and rules see the text); an edited body is packed again on replay.
 - **Spring and MassTransit understood.** Besides the broker's `x-death`, Warren reads the
   `x-exception-*` and `x-original-*` headers of Spring AMQP's `RepublishMessageRecoverer`, and
   MassTransit's `<endpoint>_error` and `_skipped` queues with their `MT-Fault-*` headers: exception,
@@ -75,6 +85,10 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   file, one message per line in the same format as a single download; the queue keeps them and the
   audit log records who exported how many. Loading such a file in the publish dialog publishes all its
   messages to one target, as one audited action (up to 1,000 messages, 50 MiB).
+- **Undo a discard or purge**: before a discarded message is acknowledged, Warren stores a full
+  copy (body, properties, headers, `x-death`) for `WARREN_DISCARD_BACKUP_RETENTION` (7 days).
+  **Restore** on the action's page puts the messages back into the source queue as they were, once,
+  as an audited action. A purge of up to 10,000 messages keeps the same copy.
 - **Purge** a whole queue in one step (operators only): the discard dialog's "All messages"
   option asks for a reason. Unlike a discard it works on
   queues of any size; the audit log records who, why and how many, not the messages themselves.
@@ -234,6 +248,7 @@ With Pro the samples are also rolled up into one row per queue and hour, kept fo
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
 | `WARREN_SMTP_HOST` / `_PORT` / `_USERNAME` / `_PASSWORD` / `_FROM` | – / `587` | Mail server for e-mail alert channels; host and sender are required for them |
 | `WARREN_SMTP_STARTTLS` / `WARREN_SMTP_SSL` | `true` / `false` | STARTTLS on 587, or implicit TLS (465) |
+| `WARREN_DISCARD_BACKUP_RETENTION` / `WARREN_DISCARD_BACKUP_MAX_BYTES` | `7d` / 100 MiB | Copies of discarded and purged messages, restorable from the audit log; `0` keeps none |
 | `WARREN_REQUIRE_DRY_RUN` / `WARREN_DRY_RUN_EXPIRES_AFTER` | `true` / `10m` | Bulk replays, discards, parks and purges only on a dry run's token, and how long it holds |
 | `WARREN_PROMETHEUS_TOKEN` | – | Team, Pro: bearer token for `/actuator/prometheus`; unset, the endpoint stays closed |
 | `WARREN_DLQ_NAME_PATTERN` | `dlq`, `dlx`, `dead-letter`, `.dead`, `.failed`, `_error`, `_skipped` | Regex for name-based DLQ detection, see `application.yml` |
