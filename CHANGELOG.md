@@ -3,6 +3,16 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.13.0 (2026-10-06)
+
+- **Failures across queues.** A new **Failures** page lists what fails in the whole cluster entry: the same exception in several dead-letter queues is one row with each queue's count (from the first 200 messages of each of the 30 fullest DLQs), grouped by reason and queue where no exception was recorded. **Replay** takes that failure from every queue at once to the original routes, optionally throttled; queues whose group carries a team note start unticked. `GET /api/clusters/{c}/failures`.
+- **Undo a discard or purge.** Before a discarded message is acknowledged, Warren stores a full copy (body, properties, headers, `x-death`); a message whose copy fails stays in the queue. **Restore** on the action's page publishes the copies back into the source queue, once, as an audited `RESTORE` action with `x-warren-restored-from`. A purge of up to 10,000 messages keeps the same copy, a larger one says it does not. `WARREN_DISCARD_BACKUP_RETENTION` (7 days, `0` off) and `WARREN_DISCARD_BACKUP_MAX_BYTES` (100 MiB per action).
+- **Set-up checks** on the queue list, each with its fix: queues with consumers but no dead-letter exchange, a dead-letter exchange that does not exist or routes nowhere, quorum DLQs with a delivery limit, DLQs no alert rule watches. `GET /api/clusters/{c}/checks`.
+- **Dead-letter map:** a page that draws where each cluster's dead letters go, retry loops and parking queues included, broken links in red; click a queue to open it.
+- **Backoff for replay rules:** "wait before the next attempt" doubles (or multiplies by up to 10) the minimum age after each replay of a message, capped at 7 days, e.g. 5 min, 10 min, 20 min, 40 min.
+- **Compressed bodies readable:** messages with `content_encoding` `gzip` or `deflate` are shown unpacked (up to 4 MiB), so search, compare and rules see the text; an edited body is packed again on replay.
+- Helm chart 0.2.1 on the 0.13 image.
+
 ## 0.12.0 (2026-10-06)
 
 - **Dry run before every bulk action.** A replay, discard or park of "the first N" or "every match", and a purge, is checked first: Warren freezes the messages the selection takes right now, says "exactly these 143 of 160 in the queue", and the confirm takes exactly those. What fails in between stays in the queue, what is gone by then is skipped; the token works once, for the operator who ran the check, for 10 minutes. A purge stops if the queue grew. With four-eyes approval the approver confirms the frozen messages. **API change:** `COUNT` and `MATCHING` selections sent straight to replay, discard or park answer `428 DRY_RUN_REQUIRED`; run `POST …/queues/{q}/plans` first and send `{"type":"PLAN","plan":"<id>"}`, or set `WARREN_REQUIRE_DRY_RUN=false` until your scripts do. Purges take the token as `"plan"`.
