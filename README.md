@@ -39,7 +39,12 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   deliveries `LIMIT`.
 - **Failures across queues**: one list of what fails in the whole cluster entry, the same exception
   in several dead-letter queues as one row with each queue's count (from the first 200 messages of
-  each), and a replay of that failure in every queue at once, to the original routes.
+  each), and a replay of that failure in every queue at once, to the original routes. A failure
+  that was not there before is tagged new, and an alert rule can announce it as it appears.
+- **Did the replay help?** A replayed message that dies again is found back in the dead-letter
+  queue by its `x-warren-replay-id` and counted against its replay: "5 of 143 died again, back in
+  orders.dlq", marked per message. Warren follows up on the source queue 5 min, 30 min, 2 h and a
+  day after each replay; the audit log shows "5 back" next to the count.
 - **Set-up checks and a dead-letter map**: the queue list names what loses or endangers dead
   letters, with the fix: queues with consumers but no dead-letter exchange, a dead-letter exchange
   that does not exist or routes nowhere, quorum DLQs with a delivery limit, DLQs no alert rule
@@ -154,7 +159,9 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   above a rate per minute (on a dead-letter queue: the dead-letter rate, which shows a mass
   failure even while a replay rule keeps draining the queue). Per broker node: free disk above
   the limit below N MB, memory above N % of the limit, publishers blocked by a resource alarm
-  (templates "Disk running low", "Memory high", "Publishers blocked"). Each can
+  (templates "Disk running low", "Memory high", "Publishers blocked"). **New failure**: an exception
+  or death reason turns up in a dead-letter queue that was not there before (template "New
+  failure"; the queues are read every `WARREN_FAILURE_SCAN_INTERVAL` while such a rule is enabled). Each can
   require the condition to hold for a number of seconds. Notifications go to Slack, Microsoft
   Teams, PagerDuty, Opsgenie, e-mail or any JSON webhook; firing alerts are re-notified after a
   configurable interval and a resolved notification follows when the queue recovers (in PagerDuty
@@ -246,6 +253,7 @@ With Pro the samples are also rolled up into one row per queue and hour, kept fo
 | `WARREN_METRICS_LONG_RETENTION` | `90d` | Pro: hourly roll-ups behind the 30 and 90 day history |
 | `WARREN_PEEK_CACHE_MAX_BYTES` | 256 MiB | Memory for peeked message bodies kept for the payload view; oldest go first |
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
+| `WARREN_FAILURE_SCAN_INTERVAL` | `2m` | How often the dead-letter queues are read for new failures, while a New failure rule is enabled |
 | `WARREN_SMTP_HOST` / `_PORT` / `_USERNAME` / `_PASSWORD` / `_FROM` | – / `587` | Mail server for e-mail alert channels; host and sender are required for them |
 | `WARREN_SMTP_STARTTLS` / `WARREN_SMTP_SSL` | `true` / `false` | STARTTLS on 587, or implicit TLS (465) |
 | `WARREN_DISCARD_BACKUP_RETENTION` / `WARREN_DISCARD_BACKUP_MAX_BYTES` | `7d` / 100 MiB | Copies of discarded and purged messages, restorable from the audit log; `0` keeps none |
