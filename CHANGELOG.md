@@ -3,6 +3,17 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.12.0 (2026-10-06)
+
+- **Dry run before every bulk action.** A replay, discard or park of "the first N" or "every match", and a purge, is checked first: Warren freezes the messages the selection takes right now, says "exactly these 143 of 160 in the queue", and the confirm takes exactly those. What fails in between stays in the queue, what is gone by then is skipped; the token works once, for the operator who ran the check, for 10 minutes. A purge stops if the queue grew. With four-eyes approval the approver confirms the frozen messages. **API change:** `COUNT` and `MATCHING` selections sent straight to replay, discard or park answer `428 DRY_RUN_REQUIRED`; run `POST …/queues/{q}/plans` first and send `{"type":"PLAN","plan":"<id>"}`, or set `WARREN_REQUIRE_DRY_RUN=false` until your scripts do. Purges take the token as `"plan"`.
+- **PagerDuty, Opsgenie and e-mail** as alert channels (Team, Pro). PagerDuty and Opsgenie get an incident when an alert fires and close it on the all-clear; repeats stay on the same incident. E-mail through `WARREN_SMTP_*`.
+- **Quiet hours per channel**, e.g. 22:00 to 07:00 Europe/Berlin: what fires in them goes out when they end, if it still fires; an all-clear always follows an alert that went out.
+- **Prometheus metrics** (Team, Pro) at `/actuator/prometheus`, behind `WARREN_PROMETHEUS_TOKEN`: messages and consumers per dead-letter and parking queue, room before publishers are blocked and memory per node, resource alarms, firing alerts, counters of replayed, discarded and parked messages. Nine alerting rules to start from in [`prometheus/warren-alerts.yml`](prometheus/warren-alerts.yml).
+- **Delivery budget on quorum queues with RabbitMQ 4.** Each message shows how many deliveries it has left ("3 of 20 left"), and the queue page warns when some are one or two failures away from being dropped. Dead-lettering into a quorum DLQ carries the count along, so messages can arrive there with most of the limit used. Replays strip `x-delivery-count` and `x-acquired-count`.
+- **Documentation** with screenshots for every feature: https://warrenops.io/docs/
+- Helm chart 0.2.0: `metrics.enabled` with a generated token, optional `ServiceMonitor` and `PrometheusRule`, and `smtp.*`.
+- The overview's cluster chips name the vhost when two entries of one broker share a name; the audit log and approvals say "from dry run" instead of "selected".
+
 ## 0.11.0 (2026-10-05)
 
 - **MassTransit understood.** `<endpoint>_error` and `_skipped` queues count as dead-letter queues. The message view reads the exception, the consumer and the retry count from MassTransit's `MT-Fault-*` headers, groups by exception, and says in one sentence which consumer faulted after how many retries. A replay goes back to the endpoint's exchange with `MT-Fault-*`, `MT-Reason` and `MT-Redelivery-Count` removed and the envelope untouched.

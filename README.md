@@ -12,6 +12,8 @@ click, logged, without a hand-written script at 3 a.m.
 
 Watch it with controls on YouTube: [Replay RabbitMQ dead letters without a script](https://youtu.be/0ojsYE-jMFA) (31 s).
 
+**Documentation with screenshots, feature by feature: https://warrenops.io/docs/**
+
 ## About this repository
 
 This is Warren's public home: the README, the compose files, the [changelog](CHANGELOG.md),
@@ -50,6 +52,11 @@ requests and questions are welcome here. Landing page: https://warrenops.io
 - **Replay** selected messages or the first N to their **original exchange and routing key**
   (from `x-death`), to a named queue, or to any exchange. Death headers are stripped so the
   message gets a fresh retry budget. Publisher confirms guarantee nothing is lost.
+- **Dry run before every bulk action**: a replay, discard or park of "the first N" or "every match",
+  and a purge, is checked first. Warren freezes the messages the selection takes right now, shows
+  how many of how many in the queue, and the confirm takes exactly those: what fails in between
+  stays in the queue, what is gone by then is skipped. The token works once, for the operator who
+  ran the check, for 10 minutes. A purge stops if the queue holds more than was counted.
 - **Throttled replay**: limit a replay to N messages per second so the consumers that just
   failed are not flooded again. A throttled replay runs in the background; its audit page
   shows the progress and the time left, and has a **Stop** button: it stops after the message it
@@ -135,8 +142,14 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   the limit below N MB, memory above N % of the limit, publishers blocked by a resource alarm
   (templates "Disk running low", "Memory high", "Publishers blocked"). Each can
   require the condition to hold for a number of seconds. Notifications go to Slack, Microsoft
-  Teams or any JSON webhook; firing alerts are re-notified after a configurable interval and
-  a resolved notification follows when the queue recovers.
+  Teams, PagerDuty, Opsgenie, e-mail or any JSON webhook; firing alerts are re-notified after a
+  configurable interval and a resolved notification follows when the queue recovers (in PagerDuty
+  and Opsgenie it closes the incident). Each channel can have quiet hours: what fires in them is
+  announced when they end, if it still fires then.
+- **Prometheus** (Team, Pro): `/actuator/prometheus` with what only Warren knows: messages and
+  consumers per dead-letter and parking queue, the room before publishers are blocked and memory per
+  node, resource alarms, firing alerts, and counters of replayed, discarded and parked messages.
+  Ready-made alerting rules in [`prometheus/warren-alerts.yml`](prometheus/warren-alerts.yml).
 - **Users and roles**: `VIEWER` reads, `OPERATOR` replays, `ADMIN` manages alerts and users.
   Local users are managed in the UI (create, roles, enable/disable, password reset; everyone
   can change their own password). The users from configuration are only seeded on first start.
@@ -219,6 +232,10 @@ With Pro the samples are also rolled up into one row per queue and hour, kept fo
 | `WARREN_METRICS_LONG_RETENTION` | `90d` | Pro: hourly roll-ups behind the 30 and 90 day history |
 | `WARREN_PEEK_CACHE_MAX_BYTES` | 256 MiB | Memory for peeked message bodies kept for the payload view; oldest go first |
 | `WARREN_ALERTING_ENABLED` / `WARREN_ALERTING_RENOTIFY_AFTER` | `true` / `4h` | Alert evaluation and repeat notifications |
+| `WARREN_SMTP_HOST` / `_PORT` / `_USERNAME` / `_PASSWORD` / `_FROM` | – / `587` | Mail server for e-mail alert channels; host and sender are required for them |
+| `WARREN_SMTP_STARTTLS` / `WARREN_SMTP_SSL` | `true` / `false` | STARTTLS on 587, or implicit TLS (465) |
+| `WARREN_REQUIRE_DRY_RUN` / `WARREN_DRY_RUN_EXPIRES_AFTER` | `true` / `10m` | Bulk replays, discards, parks and purges only on a dry run's token, and how long it holds |
+| `WARREN_PROMETHEUS_TOKEN` | – | Team, Pro: bearer token for `/actuator/prometheus`; unset, the endpoint stays closed |
 | `WARREN_DLQ_NAME_PATTERN` | `dlq`, `dlx`, `dead-letter`, `.dead`, `.failed`, `_error`, `_skipped` | Regex for name-based DLQ detection, see `application.yml` |
 | `WARREN_MASKING_ENABLED` | `true` | Hide sensitive values in the message view |
 | `WARREN_MASKING_FIELDS` | `password,passwd,secret,token,apikey,…` | Field and header names to hide, matched as part of the name, ignoring case, `-`, `_` and `.` |
@@ -280,6 +297,26 @@ warren:
 Redirect URI to register at the provider: `https://<warren>/login/oauth2/code/oidc`.
 Local users keep working next to SSO; the login page shows both.
 
+### Alert channels (Team, Pro)
+
+Channels are set up under **Alerts → Channels** by an admin; every rule names the channel it notifies.
+
+| Type | What to enter | What happens |
+|---|---|---|
+| Slack, Teams | the incoming webhook URL | one text line per event |
+| Webhook | any URL, optionally a header and a signing secret | JSON with the full event and a link to the queue |
+| PagerDuty | the routing key of an Events API v2 integration; the endpoint only for a non-default region | firing triggers an incident, the resolve closes it; repeats stay on the same incident (dedup key `warren-<event id>`) |
+| Opsgenie | an API integration key; `https://api.eu.opsgenie.com` as base for the EU instance | firing opens an alert with alias `warren-<event id>`, the resolve closes it |
+| E-mail | recipients, separated by commas; needs `WARREN_SMTP_HOST` and `WARREN_SMTP_FROM` | one mail per event to each recipient |
+
+Keys are write-only like the webhook secrets. **Send test** on a channel delivers a test event; for
+PagerDuty and Opsgenie Warren closes the test incident right after.
+
+**Quiet hours** per channel (from, to, time zone; a window may run over midnight): a firing alert is
+not sent in them and goes out on the first evaluation after they end, if it still fires. Repeats wait
+the same way. A resolve goes out whenever the firing notification went out, so no incident stays open;
+an alert that fired and recovered within the quiet hours stays silent and is in the alert history.
+
 ## Editions and licence
 
 Warren ships as one artifact with three editions. Without a licence key it runs as **Community**;
@@ -292,6 +329,7 @@ a valid key switches it to **Team** or **Pro** at runtime, no restart.
 | Roles viewer / operator / admin | every local user is admin (and may show masked values) | yes | yes |
 | Metrics history | the last hour | 15 minutes to 7 days | up to 90 days |
 | Alerting and replay rules | off (endpoints answer 402) | yes | yes |
+| Prometheus metrics (`/actuator/prometheus`) | off | yes | yes |
 | OIDC single sign-on | off | off | yes |
 | Four-eyes approval for replay, discard, purge | off | off | yes |
 | Audit export (CSV), forwarding to a SIEM, minimum retention | off | off | yes |
@@ -313,6 +351,41 @@ Warren back to Community with a warning in the UI.
 
 `GET /api/edition` returns the current state; a call the edition lacks answers
 `402 Payment Required` with the feature and the edition that has it.
+
+### Prometheus (Team, Pro)
+
+Set `WARREN_PROMETHEUS_TOKEN` to a random string and let Prometheus send it:
+
+```yaml
+scrape_configs:
+  - job_name: warren
+    metrics_path: /actuator/prometheus
+    authorization:
+      credentials: <the token>
+    static_configs:
+      - targets: ["warren:8080"]
+```
+
+Without the token, or in Community, the endpoint answers 401 or 403: queue and host names are not
+for everyone who can reach the port. The values come from the monitoring loop, so they are as fresh
+as `WARREN_METRICS_SAMPLE_INTERVAL` (30 s). What it adds to the broker's own Prometheus plugin:
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `warren_dlq_messages`, `warren_dlq_consumers` | `cluster`, `vhost`, `queue`, `kind` (`dead-letter`, `parking`) | Queues Warren classifies as dead-letter or parking queues |
+| `warren_cluster_up`, `warren_cluster_sampled_timestamp_seconds` | `cluster`, `vhost` | Whether the last sample of the entry worked, and when it ran |
+| `warren_node_disk_headroom_bytes` | `broker`, `node` | Free disk above `disk_free_limit`; negative during a disk alarm |
+| `warren_node_memory_used_ratio` | `broker`, `node` | Memory in use as a share of the high watermark |
+| `warren_node_alarm` | `broker`, `node`, `resource` | 1 while a disk or memory alarm blocks publishers |
+| `warren_alerts_firing` | `rule`, `cluster`, `target`, `target_type` | 1 per alert that fires right now |
+| `warren_actions_total` | `cluster`, `kind`, `status` | Finished replays, discards, purges, parks, exports and publishes |
+| `warren_action_messages_total` | `cluster`, `kind`, `result` (`succeeded`, `failed`) | Messages those actions handled |
+
+Plus the usual JVM and HTTP metrics. [`prometheus/warren-alerts.yml`](prometheus/warren-alerts.yml)
+holds alerting rules to start from: dead letters waiting or piling up, a dead-letter queue being
+consumed, a broker Warren cannot read, under 1 GB before publishers are blocked, memory near the
+watermark, a resource alarm, failed replays. Several Warren instances on one database: scrape all of
+them; the gauges come from the one that runs the monitoring loop.
 
 ### Four-eyes approval (Pro)
 
@@ -389,6 +462,14 @@ queues Warren reads nothing until the user confirms: the API answers `409` with
 `code: DELIVERY_COUNTED` until the request carries `acknowledgeDeliveryCount`, and replay rules
 skip them. RabbitMQ 4 counts only abnormal returns, so peeks are safe there.
 
+What RabbitMQ 4 still counts, a consumer or Warren dying while holding a message, it keeps in
+`x-delivery-count`, and dead-lettering into another quorum queue carries the count along: a
+message can arrive in a quorum DLQ with most of the DLQ's limit (20 by default) used up. Warren
+shows each message's budget in the list ("3 of 20 left") and warns on the queue page when loaded
+messages are one or two failed deliveries away from being dropped or dead-lettered again. A replay
+publishes the message anew, which starts the count over; Warren strips `x-delivery-count` and
+`x-acquired-count` so the replayed copy does not show the old number.
+
 ## API
 
 All endpoints need a session (`POST /api/auth/login` with `{"username","password"}`) or an
@@ -402,6 +483,7 @@ GET  /api/clusters/{c}/queues                              queues with dead-lett
 GET  /api/clusters/{c}/queues/{q}/messages?limit=          peek at messages (max 200)
 GET  /api/clusters/{c}/queues/{q}/history?range=1h         sampled metrics, range 15m…7d, up to 90d with Pro
 GET  /api/clusters/{c}/queues/{q}/forecast                 when the queue is empty at the current pace
+POST /api/clusters/{c}/queues/{q}/plans                    dry run of a bulk replay, discard, park or purge: freezes the messages, returns the token (OPERATOR)
 POST /api/clusters/{c}/queues/{q}/replay                   run a replay (OPERATOR); 202 when it waits for approval
 POST /api/clusters/{c}/queues/{q}/park                     move messages to {q}.parking (OPERATOR)
 GET  /api/replays?clusterId=&kind=&queue=&requestedBy=&since=&before=   audit log, newest first
@@ -435,8 +517,25 @@ Replay body:
 }
 ```
 
-`selection.type` is `COUNT` (with `count`), `FINGERPRINTS` (with fingerprints from the
-messages endpoint) or `MATCHING` (with `match`: `reasons` such as `rejected` or `republished`
+`selection.type` is `FINGERPRINTS` (with fingerprints from the messages endpoint) or `PLAN`
+(with `plan`, the token of a dry run). `COUNT` and `MATCHING` describe which messages to take and
+go into the dry run, which freezes them:
+
+```bash
+curl -b cookies -X POST …/queues/orders.dlq/plans -H 'content-type: application/json' \
+  -d '{"kind":"REPLAY","selection":{"type":"MATCHING","match":{"text":"ACME"}}}'
+# {"id":"8f0c…","count":143,"depth":160,"expiresAt":"…"}
+curl -b cookies -X POST …/queues/orders.dlq/replay -H 'content-type: application/json' \
+  -d '{"selection":{"type":"PLAN","plan":"8f0c…"},"target":{"type":"ORIGINAL"}}'
+```
+
+`kind` is `REPLAY`, `DISCARD`, `PARK` or `PURGE` (no selection; the purge then sends `"plan"`
+next to its reason). A bulk selection sent straight to an action answers `428` with the code
+`DRY_RUN_REQUIRED`; `WARREN_REQUIRE_DRY_RUN=false` allows it for scripts that cannot do two steps
+yet. A dry run's token is redeemed once, by its author, for the same kind and queue, within
+`WARREN_DRY_RUN_EXPIRES_AFTER` (10 min); with four-eyes approval the frozen messages are what the
+approver confirms. In the dry run, `COUNT` takes `count` messages from the head and `MATCHING`
+takes `match` (`reasons` such as `rejected` or `republished`
 and/or `text` found in the payload or a header value; every match of the scan is taken, or at
 most `count` of them). A `MATCHING` selection applies the queue view's filter to the whole
 queue, not only to the messages it has loaded; it scans up to `warren.inspection.max-scan`
@@ -448,7 +547,7 @@ optional; with it the replay is throttled and runs in the background (see above)
 
 ## Roadmap
 
-Message editing for several messages at once, e-mail as a notification channel, per-cluster
+Message editing for several messages at once, per-cluster
 permissions.
 
 ## License

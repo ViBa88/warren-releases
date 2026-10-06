@@ -86,6 +86,33 @@ oidc:
   rolesClaim: roles
   defaultRole: VIEWER
 
+# Team, Pro: /actuator/prometheus for Prometheus, open only with a bearer token. Leave token empty to have
+# the chart generate one (kept across upgrades). With the Prometheus Operator, serviceMonitor scrapes Warren
+# with that token and prometheusRule installs the alerting rules of prometheus/warren-alerts.yml.
+metrics:
+  enabled: false
+  token: ""
+  existingSecret: ""
+  existingSecretKey: prometheus-token
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+  prometheusRule:
+    enabled: false
+    labels: {}
+
+# Team, Pro: the mail server for e-mail alert channels.
+smtp:
+  host: ""
+  port: 587
+  username: ""
+  password: ""
+  existingSecret: ""
+  existingSecretKey: smtp-password
+  from: ""            # Warren <warren@example.com>
+  starttls: true
+
 # Any other WARREN_* setting, e.g. WARREN_AUDIT_RETENTION: 90d or WARREN_APPROVAL_ACTIONS: REPLAY,DISCARD,PURGE
 env: {}
 # Further env entries in Kubernetes syntax, e.g. from Secrets

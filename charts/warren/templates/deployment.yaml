@@ -121,6 +121,26 @@ spec:
               value: {{ .Values.oidc.defaultRole | quote }}
             {{- include "warren.secretEnv" (dict "name" "WARREN_OIDC_CLIENT_SECRET" "ctx" . "existingSecret" .Values.oidc.existingSecret "key" .Values.oidc.existingSecretKey) | nindent 12 }}
             {{- end }}
+            {{- if .Values.metrics.enabled }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_PROMETHEUS_TOKEN" "ctx" . "existingSecret" .Values.metrics.existingSecret "key" .Values.metrics.existingSecretKey) | nindent 12 }}
+            {{- end }}
+            {{- if .Values.smtp.host }}
+            - name: WARREN_SMTP_HOST
+              value: {{ .Values.smtp.host | quote }}
+            - name: WARREN_SMTP_PORT
+              value: {{ .Values.smtp.port | quote }}
+            - name: WARREN_SMTP_FROM
+              value: {{ required "smtp.from is required with smtp.host" .Values.smtp.from | quote }}
+            - name: WARREN_SMTP_STARTTLS
+              value: {{ .Values.smtp.starttls | quote }}
+            {{- with .Values.smtp.username }}
+            - name: WARREN_SMTP_USERNAME
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if or .Values.smtp.password .Values.smtp.existingSecret }}
+            {{- include "warren.secretEnv" (dict "name" "WARREN_SMTP_PASSWORD" "ctx" . "existingSecret" .Values.smtp.existingSecret "key" .Values.smtp.existingSecretKey) | nindent 12 }}
+            {{- end }}
+            {{- end }}
             {{- range $k, $v := .Values.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}

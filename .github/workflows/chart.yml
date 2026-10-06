@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
       - run: helm lint charts/warren --strict
+      - run: helm lint charts/warren --strict --set metrics.enabled=true --set metrics.serviceMonitor.enabled=true --set metrics.prometheusRule.enabled=true --set smtp.host=mail --set smtp.from=warren@example.com
       - uses: helm/kind-action@v1
       - name: RabbitMQ for the test
         run: |
