@@ -3,6 +3,14 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.14.0 (2026-10-06)
+
+- **Did the replay help?** A replayed message that dies again is found back in a dead-letter queue by its `x-warren-replay-id` and counted against its replay. The replay's page says "5 of 143 replayed messages died again: 5 back in orders.dlq. The other 138 are not back (96 %)" and marks those messages **back in DLQ**; the audit log shows "5 back" next to the count. Every read of a queue looks for returns, and Warren reads the source queue itself 5 minutes, 30 minutes, 2 hours and a day after each replay, saying how much of it each check read. Copies published through Warren do not count.
+- **Alerts on new failures** (Team, Pro). The new condition **New failure** fires when an exception or death reason turns up in a dead-letter queue that was not there when Warren read the queue before: "new failure in payments.dlq: InsufficientFundsException: account <n> (3 messages, first seen 14:02 UTC)". A second new failure while the alert fires is announced at once; the alert resolves when the messages are gone or after the hours set on the rule (24 by default). While such a rule is enabled the dead-letter queues are read every `WARREN_FAILURE_SCAN_INTERVAL` (2 minutes). New template "New failure".
+- The **Failures** page tags a failure that is new in its queue and says when Warren first saw it.
+- Documentation screenshots for both: https://warrenops.io/docs/replay.html#did-it-help
+- Helm chart 0.2.2 on the 0.14 image.
+
 ## 0.13.0 (2026-10-06)
 
 - **Failures across queues.** A new **Failures** page lists what fails in the whole cluster entry: the same exception in several dead-letter queues is one row with each queue's count (from the first 200 messages of each of the 30 fullest DLQs), grouped by reason and queue where no exception was recorded. **Replay** takes that failure from every queue at once to the original routes, optionally throttled; queues whose group carries a team note start unticked. `GET /api/clusters/{c}/failures`.
