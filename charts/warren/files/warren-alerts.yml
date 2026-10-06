@@ -1,0 +1,83 @@
+# Prometheus alerting rules for Warren's /actuator/prometheus (Warren Team or Pro).
+# Load with `rule_files: [warren-alerts.yml]`; on the Prometheus Operator wrap the `groups:` in a PrometheusRule
+# (the Helm chart does that with `metrics.prometheusRule.enabled=true`). Thresholds are starting points: adjust `for:` and the
+# numbers to your traffic.
+groups:
+  - name: warren
+    rules:
+      - alert: WarrenDeadLetters
+        expr: warren_dlq_messages{kind="dead-letter"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.queue }} holds {{ $value }} dead letters"
+          description: "Dead-letter queue {{ $labels.queue }} on {{ $labels.cluster }} ({{ $labels.vhost }}) has held messages for 10 minutes. Open it in Warren to see why they died."
+
+      - alert: WarrenDeadLettersGrowing
+        expr: delta(warren_dlq_messages{kind="dead-letter"}[15m]) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.queue }} gained {{ $value }} dead letters in 15 minutes"
+          description: "Messages keep failing into {{ $labels.queue }} on {{ $labels.cluster }}: a consumer is likely broken right now."
+
+      - alert: WarrenDeadLetterQueueConsumed
+        expr: warren_dlq_consumers{kind="dead-letter"} > 0 and warren_dlq_messages{kind="dead-letter"} == 0
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "Something consumes {{ $labels.queue }}"
+          description: "A dead-letter queue with consumers stays empty. If nobody meant to process dead letters automatically, they are being lost."
+
+      - alert: WarrenBrokerUnreachable
+        expr: warren_cluster_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Warren cannot read {{ $labels.cluster }}"
+          description: "The management API of cluster entry {{ $labels.cluster }} ({{ $labels.vhost }}) has not answered for 2 minutes."
+
+      - alert: WarrenSamplingStale
+        expr: time() - warren_cluster_sampled_timestamp_seconds > 300
+        labels:
+          severity: warning
+        annotations:
+          summary: "Warren has not sampled {{ $labels.cluster }} for 5 minutes"
+          description: "The monitoring loop is stuck or disabled (WARREN_METRICS_ENABLED); the other warren_* values are out of date."
+
+      - alert: WarrenBrokerDiskLow
+        expr: warren_node_disk_headroom_bytes < 1e9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.node }}: under 1 GB before publishers are blocked"
+          description: "Free disk on {{ $labels.node }} ({{ $labels.broker }}) is {{ $value | humanize1024 }}B above disk_free_limit. At 0 RabbitMQ blocks every publisher."
+
+      - alert: WarrenBrokerMemoryHigh
+        expr: warren_node_memory_used_ratio > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.node }} uses {{ $value | humanizePercentage }} of its memory watermark"
+          description: "At 100 % RabbitMQ raises a memory alarm and blocks publishers on {{ $labels.broker }}."
+
+      - alert: WarrenBrokerAlarm
+        expr: warren_node_alarm == 1
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.resource }} alarm on {{ $labels.node }}: publishers are blocked"
+          description: "RabbitMQ on {{ $labels.broker }} blocks every publishing connection until the {{ $labels.resource }} alarm clears."
+
+      - alert: WarrenReplayFailures
+        expr: increase(warren_action_messages_total{kind="replay", result="failed"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replays on {{ $labels.cluster }} failed for {{ $value }} messages"
+          description: "A replay could not publish some messages (unroutable or not confirmed). They are still in the source queue; the audit log in Warren says which."

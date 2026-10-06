@@ -38,6 +38,8 @@ Sign in as `admin`; the generated password is printed in the notes. The RabbitMQ
 | `externalDatabase.*` | off | Pro: `jdbc:postgresql://…` instead of the embedded database |
 | `oidc.*` | off | Pro: single sign-on |
 | `ingress.*` | off | Hosts, class and TLS |
+| `metrics.enabled` | off | Team, Pro: `/actuator/prometheus` with a generated bearer token; `metrics.serviceMonitor.enabled` and `metrics.prometheusRule.enabled` for the Prometheus Operator |
+| `smtp.*` | off | Team, Pro: mail server for e-mail alert channels |
 | `env` | `{}` | Any other `WARREN_*` setting, e.g. `WARREN_AUDIT_RETENTION: 90d` |
 
 All settings are in [values.yaml](values.yaml); Warren's own configuration in the
