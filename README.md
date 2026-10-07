@@ -483,7 +483,11 @@ replay, discard or export reads and puts back, counts as a delivery. A message t
 limit (`x-delivery-limit` or the policy's `delivery-limit`) is dropped or dead-lettered. On such
 queues Warren reads nothing until the user confirms: the API answers `409` with
 `code: DELIVERY_COUNTED` until the request carries `acknowledgeDeliveryCount`, and replay rules
-skip them. RabbitMQ 4 counts only abnormal returns, so peeks are safe there.
+skip them. RabbitMQ 4 counts only abnormal returns, but it drops a message the moment it is put back when its
+delivery count is already above the queue's limit (measured on 4.3.6), and that is how messages dead-lettered for
+`delivery_limit` arrive in a quorum DLQ with the default limits (21 against 20). So on RabbitMQ 4 Warren asks the same way
+before reading a quorum dead-letter queue that has a delivery limit (`reason: OVER_LIMIT` in the 409); with
+`delivery-limit: -1` on the DLQ it reads without asking.
 
 What RabbitMQ 4 still counts, a consumer or Warren dying while holding a message, it keeps in
 `x-delivery-count`, and dead-lettering into another quorum queue carries the count along: a

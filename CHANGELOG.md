@@ -3,6 +3,11 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.14.1 (2026-10-07)
+
+- **Fix, possible data loss on RabbitMQ 4:** reading a quorum dead-letter queue that has a delivery limit could drop messages. Measured on RabbitMQ 4.3.6: a message whose `x-delivery-count` is already above the queue's limit is dropped, or dead-lettered on, the moment it is put back, also after a peek with requeue. With the default limits every message one quorum queue dead-letters for `delivery_limit` arrives in a quorum DLQ at 21 against 20, so Warren's own peek of such a DLQ removed it. Warren now asks before reading these queues, as it already did for every quorum queue with a limit on 3.13: queue page, message view, replay, discard, export, dry runs, replay rules and the replay follow-up (API: `409 DELIVERY_COUNTED` with `reason: OVER_LIMIT` until the request carries `acknowledgeDeliveryCount`). The queue list tags them `LIMIT`, the Failures page leaves them out, and the queue page shows the fix: `delivery-limit: -1` on dead-letter queues, after which they are read as usual.
+- Helm chart 0.2.3 on the 0.14.1 image.
+
 ## 0.14.0 (2026-10-06)
 
 - **Did the replay help?** A replayed message that dies again is found back in a dead-letter queue by its `x-warren-replay-id` and counted against its replay. The replay's page says "5 of 143 replayed messages died again: 5 back in orders.dlq. The other 138 are not back (96 %)" and marks those messages **back in DLQ**; the audit log shows "5 back" next to the count. Every read of a queue looks for returns, and Warren reads the source queue itself 5 minutes, 30 minutes, 2 hours and a day after each replay, saying how much of it each check read. Copies published through Warren do not count.
