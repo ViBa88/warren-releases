@@ -170,7 +170,8 @@ requests and questions are welcome here. Landing page: https://warrenops.io
 - **Prometheus** (Team, Pro): `/actuator/prometheus` with what only Warren knows: messages and
   consumers per dead-letter and parking queue, the room before publishers are blocked and memory per
   node, resource alarms, firing alerts, and counters of replayed, discarded and parked messages.
-  Ready-made alerting rules in [`prometheus/warren-alerts.yml`](prometheus/warren-alerts.yml).
+  Ready-made alerting rules in [`prometheus/warren-alerts.yml`](prometheus/warren-alerts.yml) and a
+  Grafana dashboard in [`grafana/warren-dashboard.json`](grafana/warren-dashboard.json).
 - **Users and roles**: `VIEWER` reads, `OPERATOR` replays, `ADMIN` manages alerts and users.
   Local users are managed in the UI (create, roles, enable/disable, password reset; everyone
   can change their own password). The users from configuration are only seeded on first start.
