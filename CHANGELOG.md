@@ -3,6 +3,11 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.14.3 (2026-10-08)
+
+- **Fix:** below 960 px window width the top bar stretched over half the screen on short pages, such as the audit log or an empty queue. It now keeps its own height.
+- Helm chart 0.2.5 on the 0.14.3 image.
+
 ## 0.14.2 (2026-10-07)
 
 - **Fix:** after a restore Warren opened the restore's audit entry, but the page went on showing the purge, because only the id in the address changed. The audit entry page now loads the entry whenever its id changes, also for "see the restore" links.
