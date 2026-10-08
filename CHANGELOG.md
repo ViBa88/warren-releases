@@ -3,6 +3,24 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.15.0 (2026-10-08)
+
+- **Upgrade note: the audit log is now kept for a year by default.** Installations that never set `WARREN_AUDIT_RETENTION` delete finished actions and resolved alert events older than a year, starting with the first hourly run after the upgrade. Set `WARREN_AUDIT_RETENTION=0` to keep everything as before. A Pro `WARREN_AUDIT_MIN_RETENTION` longer than a year wins over the default.
+- **Fix: dead-letter exchanges and delivery limits set by policy are seen in the queue list.** RabbitMQ leaves `effective_policy_definition` out of a column-filtered queue list, so set-up checks, the dead-letter map and dead-letter detection missed a DLX set by policy, and the quorum guard missed a `delivery-limit` set by policy. Warren now reads the vhost's policies and merges them as the broker does.
+- **Fix: alert webhooks, PagerDuty, Opsgenie and audit forwarding time out** after 5 s to connect and 10 s to answer (`WARREN_OUTBOUND_CONNECT_TIMEOUT`, `WARREN_OUTBOUND_READ_TIMEOUT`); a receiver that never answered held up alerting.
+- **Fix:** a replay's page no longer keeps polling after you leave it, and a late answer no longer replaces a newer entry or the queue list of another cluster.
+- **Large brokers, measured on 5,000 queues:**
+  - API responses are gzip-compressed (the queue list went from 1.76 MB to 18 KB on the wire in the test).
+  - Queue and binding lists are shared per cluster for 3 s (`WARREN_LIST_CACHE_TTL`) and cleared after every action: 20 tabs refreshing at once took 1.1 s instead of 6.1 s.
+  - Opening one message's full body reads the broker's answer message by message: 150 × 1 MB in front of it no longer runs Warren out of memory.
+  - The overview's growth and GROWTH alerts look up one sampling round instead of a whole window (637 ms → 38 ms on 1.2 million samples).
+  - Queue samples are written when a queue changed, idle queues every 5 minutes (70,014 → 5,001 rows in the test); the hourly roll-up runs in the database.
+  - The New failure scan reads only dead-letter queues whose count changed (all every 10 minutes), clusters at the same time, outside the users' peek cache.
+  - A large action's page loads its messages 500 at a time.
+  - Pages stop refreshing in hidden browser tabs and never stack refreshes.
+- **Community:** locked features say that Team and Pro are not on sale yet and link the waitlist; the locked audit export opens the licence page.
+- Helm chart 0.2.6 on the 0.15.0 image.
+
 ## 0.14.3 (2026-10-08)
 
 - **Fix:** below 960 px window width the top bar stretched over half the screen on short pages, such as the audit log or an empty queue. It now keeps its own height.
