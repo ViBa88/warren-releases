@@ -10,7 +10,7 @@ click, logged, without a hand-written script at 3 a.m.
 
 ![Warren: from 200 dead letters to a throttled replay, keyboard only](docs/demo-main.gif)
 
-Watch it with controls on YouTube: [Replay RabbitMQ dead letters without a script](https://youtu.be/0ojsYE-jMFA) (31 s).
+Watch it with controls on YouTube: [Replay RabbitMQ dead letters without a script](https://youtu.be/TcHVZsqOhqA) (31 s).
 
 **Documentation with screenshots, feature by feature: https://warrenops.io/docs/**
 
