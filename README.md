@@ -45,6 +45,12 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   queue by its `x-warren-replay-id` and counted against its replay: "5 of 143 died again, back in
   orders.dlq", marked per message. Warren follows up on the source queue 5 min, 30 min, 2 h and a
   day after each replay; the audit log shows "5 back" next to the count.
+- **Canary replay**: one message first, and the other 142 only once it has not died back into the
+  queue within the wait (2 minutes by default). If it comes back, the replay stops and the rest
+  stays; the replay's page and the audit log say so.
+- **Incident report per failure**: where and since when Warren saw a failure, the team's notes,
+  every replay, park and discard that touched it with what became of them, and what is left now,
+  as a page and as a Markdown file for the post-mortem.
 - **Set-up checks and a dead-letter map**: the queue list names what loses or endangers dead
   letters, with the fix: queues with consumers but no dead-letter exchange, a dead-letter exchange
   that does not exist or routes nowhere, quorum DLQs with a delivery limit, DLQs no alert rule
@@ -73,8 +79,8 @@ requests and questions are welcome here. Landing page: https://warrenops.io
   stays in the queue, what is gone by then is skipped. The token works once, for the operator who
   ran the check, for 10 minutes. A purge stops if the queue holds more than was counted.
 - **Throttled replay**: limit a replay to N messages per second so the consumers that just
-  failed are not flooded again. A throttled replay runs in the background; its audit page
-  shows the progress and the time left, and has a **Stop** button: it stops after the message it
+  failed are not flooded again. Every replay runs in the background; its page shows the
+  progress (with a rate also the time left), and has a **Stop** button: it stops after the message it
   is on, what went stays replayed, the rest stays in the queue (status `STOPPED`).
 - **Edit before replay**: select one message, fix the payload (with JSON validation), the
   content type or the headers, replay. "Remove retry bookkeeping" drops headers such as

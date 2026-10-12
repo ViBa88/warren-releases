@@ -3,6 +3,16 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.16.0 (2026-10-12)
+
+- **Canary replay: one message first.** The replay dialog and the Failures page can send the first message of a selection alone and watch the source queue for it during a wait (2 minutes by default, 5 seconds to 30 minutes). If it dies back into the queue, the replay stops and the rest stays where it was; if not, the rest follows, at the rate you set. The replay's page says "Canary out" with the time the wait ends, then "Canary passed" or "Canary died again". API: `"canary": {"waitSeconds": 120}` on a replay.
+- **Incident report per failure.** **Report** on a row of the Failures page builds the story of that failure for the post-mortem: where and since when Warren has seen it, the team's notes, every replay, park and discard that touched its messages with who did it and what became of it, and what is left now. As a page and as Markdown (`GET /api/clusters/{c}/failures/report?key=`, `…/report.md`). Actions are matched to a failure from 0.16 on.
+- **Every replay runs in the background with a progress page.** A full-speed replay of 150 messages used to run inside the request, with only a spinner on the dialog's button. The dialog now closes at once and the replay's page shows replayed and failed so far. Scripts calling the API still get the final result unless they add `?background=true`.
+- **Message view: bodies up to 32 MiB.** "Load the whole message" read at most 1 MiB, so a larger body stayed cut and an attachment in it could not be opened. The limit is now 32 MiB (`WARREN_MAX_FULL_BODY_BYTES`); a body beyond it says so, and cut JSON is still laid out.
+- **Fix:** the cluster list in the sidebar was read once per session, so a broker that went away kept its green dot. It is now refreshed when the list opens, on a switch and every 30 s.
+- The Failures page links each queue of a failure directly instead of folding them into a row expander.
+- Helm chart 0.2.7 on the 0.16.0 image.
+
 ## 0.15.0 (2026-10-08)
 
 - **Upgrade note: the audit log is now kept for a year by default.** Installations that never set `WARREN_AUDIT_RETENTION` delete finished actions and resolved alert events older than a year, starting with the first hourly run after the upgrade. Set `WARREN_AUDIT_RETENTION=0` to keep everything as before. A Pro `WARREN_AUDIT_MIN_RETENTION` longer than a year wins over the default.
