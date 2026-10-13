@@ -3,6 +3,21 @@
 All notable changes to Warren. Images are published as `ghcr.io/viba88/warren:<version>`,
 `:<major>.<minor>` and `:latest`.
 
+## 0.17.0 (2026-10-13)
+
+- **Cleaner action dialogs.** Replay, discard, park, export, publish and "Automate replays" share one layout: one bordered row per choice, and the fields of a choice (target queue, exchange, rate, canary wait) only appear once it is chosen instead of sitting there greyed out. Notes of the team show as a one-line banner.
+- **Queue pickers you type into.** The target queue in replay, publish and replay rules, and the queue filter of the audit log, filter while you type in the field itself; the arrow shows all queues.
+- **Queue list stays fast on large brokers.** Typing in the filter answers every key at once and redraws the table once per pause; above 30 rows only the visible rows are drawn. Measured on 249 queues: 16 ms per key instead of 410–460 ms.
+- **Fix: a retry loop replays to the consumer.** A message that went round a TTL wait queue several times was sent back into the wait queue; its original route is now the queue whose consumer rejected it. The message view tells such a loop as one story.
+- **Fix: publish bodies up to 32 MiB**, and a broker's `max_message_size` refusal is shown in words. A failed publish (for example an unroutable routing key) keeps the dialog and its input, with the reason and a link to the audit record.
+- **Fix: "empty in N min" without a consumer.** After a one-off park or discard a dead-letter queue nobody reads was shown as draining. Only a running read or a TTL counts now.
+- **Fix: history chart on a real time axis.** Hours without samples keep their width and break the line instead of being drawn as one step.
+- **Fix: parking queues are never dead-letter queues**, whatever their name (`orders.dlq.parking` counted as dead letters and fed the alert templates), and no longer count as "no consumers".
+- **Fix:** notes count for a failure whichever breakdown they were written in, so the Failures page and the incident report show them; grouping, replay rules and the message view read the same exception headers (now also `x-exception-class` and `x-exception`).
+- **Fix:** a channel test says why it failed (HTTP status or cause, never the URL); unknown API paths answer 404 instead of 500; `g q` and the Queues link follow a cluster switch; the overview names the queue a publish went to.
+- Wording: proper plurals, "1 d" instead of "1440 min", a restore names what it put back, a stopped canary is reported once.
+- Helm chart 0.2.8 on the 0.17.0 image.
+
 ## 0.16.0 (2026-10-12)
 
 - **Canary replay: one message first.** The replay dialog and the Failures page can send the first message of a selection alone and watch the source queue for it during a wait (2 minutes by default, 5 seconds to 30 minutes). If it dies back into the queue, the replay stops and the rest stays where it was; if not, the rest follows, at the rate you set. The replay's page says "Canary out" with the time the wait ends, then "Canary passed" or "Canary died again". API: `"canary": {"waitSeconds": 120}` on a replay.
